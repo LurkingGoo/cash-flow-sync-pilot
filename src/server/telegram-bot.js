@@ -1,34 +1,19 @@
+import express from 'express';
+import fetch from 'node-fetch';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const app = express();
+app.use(express.json());
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface TelegramUpdate {
-  message?: {
-    message_id: number;
-    from: {
-      id: number;
-      username?: string;
-      first_name: string;
-    };
-    chat: {
-      id: number;
-    };
-    text?: string;
-  };
-}
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const telegramToken = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function sendTelegramMessage(chatId: number, text: string) {
+async function sendTelegramMessage(chatId, text) {
   const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
   await fetch(url, {
     method: 'POST',
@@ -41,7 +26,7 @@ async function sendTelegramMessage(chatId: number, text: string) {
   });
 }
 
-async function getUserByTelegramId(telegramId: number) {
+async function getUserByTelegramId(telegramId) {
   const { data } = await supabase
     .from('user_links')
     .select('user_id')
@@ -50,14 +35,14 @@ async function getUserByTelegramId(telegramId: number) {
   return data?.user_id;
 }
 
-async function linkUser(telegramId: number, userId: string) {
+async function linkUser(telegramId, userId) {
   const { error } = await supabase
     .from('user_links')
     .insert({ telegram_id: telegramId, user_id: userId });
   return !error;
 }
 
-async function getCategories(userId: string, type: string) {
+async function getCategories(userId, type) {
   const { data } = await supabase
     .from('categories')
     .select('id, name')
@@ -67,7 +52,7 @@ async function getCategories(userId: string, type: string) {
   return data || [];
 }
 
-async function getCards(userId: string) {
+async function getCards(userId) {
   const { data } = await supabase
     .from('cards')
     .select('id, name')
@@ -76,8 +61,7 @@ async function getCards(userId: string) {
   return data || [];
 }
 
-async function addTransaction(userId: string, amount: number, description: string, categoryName: string, cardName: string) {
-  // Get category ID
+async function addTransaction(userId, amount, description, categoryName, cardName) {
   const { data: category } = await supabase
     .from('categories')
     .select('id')
@@ -86,7 +70,6 @@ async function addTransaction(userId: string, amount: number, description: strin
     .eq('category_type', 'expense')
     .single();
 
-  // Get card ID
   const { data: card } = await supabase
     .from('cards')
     .select('id')
@@ -112,8 +95,7 @@ async function addTransaction(userId: string, amount: number, description: strin
   return !error;
 }
 
-async function addStockTransaction(userId: string, symbol: string, shares: number, price: number, type: 'buy' | 'sell') {
-  // Get stock category
+async function addStockTransaction(userId, symbol, shares, price, type) {
   const { data: category } = await supabase
     .from('categories')
     .select('id')
@@ -142,14 +124,12 @@ async function addStockTransaction(userId: string, symbol: string, shares: numbe
   return !error;
 }
 
-async function getSummary(userId: string) {
-  // Get total expenses
+async function getSummary(userId) {
   const { data: expenses } = await supabase
     .from('transactions')
     .select('amount')
     .eq('user_id', userId);
 
-  // Get stock holdings value
   const { data: holdings } = await supabase
     .from('holdings')
     .select('shares, average_price')
@@ -161,11 +141,11 @@ async function getSummary(userId: string) {
   return { totalExpenses, totalStockValue };
 }
 
-async function handleCommand(telegramId: number, command: string, args: string[]) {
+async function handleCommand(telegramId, command, args) {
   const userId = await getUserByTelegramId(telegramId);
 
   if (!userId && !command.startsWith('/link')) {
-    return "Please link your account first using: /link [your-user-id]";
+    return "Please link your account first using: /link [your-email]";
   }
 
   switch (command) {
@@ -174,7 +154,7 @@ async function handleCommand(telegramId: number, command: string, args: string[]
       return `*Finance Tracker Bot Commands:*
 
 📊 *Account Management:*
-/link [user-id] - Link your Telegram to your account
+/link [your-email] - Link your Telegram to your account
 /balance - Show your financial summary
 
 💰 *Add Transactions:*
@@ -193,13 +173,26 @@ Need help? Just type /help anytime!`;
 
     case '/link':
       if (args.length !== 1) {
-        return "Usage: /link [your-user-id]";
+        return "Usage: /link [your-email]";
       }
-      const success = await linkUser(telegramId, args[0]);
-      return success ? "✅ Account linked successfully!" : "❌ Failed to link account. Please check your user ID.";
+      // Look up user_id by email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', args[0])
+        .single();
+
+      if (!profile) {
+        return "❌ Email not found. Please use the email you registered with.";
+      }
+
+      const success = await linkUser(telegramId, profile.id);
+      return success
+        ? "✅ Account linked successfully!"
+        : "❌ Failed to link account. Please try again.";
 
     case '/balance':
-      const summary = await getSummary(userId!);
+      const summary = await getSummary(userId);
       return `💰 *Your Financial Summary:*
 
 💸 Total Expenses: $${summary.totalExpenses.toFixed(2)}
@@ -207,11 +200,11 @@ Need help? Just type /help anytime!`;
 📈 Net Worth: $${(summary.totalStockValue - summary.totalExpenses).toFixed(2)}`;
 
     case '/categories':
-      const categories = await getCategories(userId!, 'expense');
+      const categories = await getCategories(userId, 'expense');
       return `📋 *Available Categories:*\n${categories.map(c => `• ${c.name}`).join('\n')}`;
 
     case '/cards':
-      const cards = await getCards(userId!);
+      const cards = await getCards(userId);
       return `💳 *Available Cards:*\n${cards.map(c => `• ${c.name}`).join('\n')}`;
 
     case '/add_expense':
@@ -222,14 +215,14 @@ Need help? Just type /help anytime!`;
       const description = args[1];
       const category = args[2];
       const card = args[3];
-      
+
       if (isNaN(amount)) {
         return "❌ Invalid amount. Please enter a valid number.";
       }
 
-      const expenseSuccess = await addTransaction(userId!, amount, description, category, card);
-      return expenseSuccess ? 
-        `✅ Expense added: $${amount.toFixed(2)} for ${description}` : 
+      const expenseSuccess = await addTransaction(userId, amount, description, category, card);
+      return expenseSuccess ?
+        `✅ Expense added: $${amount.toFixed(2)} for ${description}` :
         "❌ Failed to add expense. Check category and card names.";
 
     case '/add_stock':
@@ -239,15 +232,15 @@ Need help? Just type /help anytime!`;
       const symbol = args[0];
       const shares = parseFloat(args[1]);
       const price = parseFloat(args[2]);
-      const type = args[3].toLowerCase() as 'buy' | 'sell';
-      
+      const type = args[3].toLowerCase();
+
       if (isNaN(shares) || isNaN(price) || !['buy', 'sell'].includes(type)) {
         return "❌ Invalid parameters. Check shares, price, and type (buy/sell).";
       }
 
-      const stockSuccess = await addStockTransaction(userId!, symbol, shares, price, type);
-      return stockSuccess ? 
-        `✅ Stock transaction added: ${type.toUpperCase()} ${shares} shares of ${symbol} at $${price}` : 
+      const stockSuccess = await addStockTransaction(userId, symbol, shares, price, type);
+      return stockSuccess ?
+        `✅ Stock transaction added: ${type.toUpperCase()} ${shares} shares of ${symbol} at $${price}` :
         "❌ Failed to add stock transaction.";
 
     default:
@@ -255,14 +248,10 @@ Need help? Just type /help anytime!`;
   }
 }
 
-const handler = async (req: Request): Promise<Response> => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+app.post('/telegram-bot', async (req, res) => {
+  console.log('Received Telegram update:', req.body); // Add this line
   try {
-    const update: TelegramUpdate = await req.json();
-    console.log('Received update:', update);
+    const update = req.body;
 
     if (update.message?.text) {
       const chatId = update.message.chat.id;
@@ -283,17 +272,14 @@ const handler = async (req: Request): Promise<Response> => {
       await sendTelegramMessage(chatId, response);
     }
 
-    return new Response('OK', {
-      status: 200,
-      headers: corsHeaders
-    });
+    res.status(200).send('OK');
   } catch (error) {
     console.error('Error processing update:', error);
-    return new Response('Error', {
-      status: 500,
-      headers: corsHeaders
-    });
+    res.status(500).send('Error');
   }
-};
+});
 
-serve(handler);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Telegram bot server running on port ${PORT}`);
+});
