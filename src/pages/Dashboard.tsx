@@ -50,6 +50,10 @@ const Dashboard = () => {
     navigate('/auth');
   };
 
+  const handleProfileUpdate = (updatedProfile: any) => {
+    setProfile(updatedProfile);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -95,7 +99,7 @@ const Dashboard = () => {
               <NotificationModal />
               
               {/* Settings */}
-              <SettingsModal profile={profile} onProfileUpdate={setProfile} />
+              <SettingsModal profile={profile} onProfileUpdate={handleProfileUpdate} />
 
               {/* Help */}
               <HelpModal userEmail={user?.email} />
