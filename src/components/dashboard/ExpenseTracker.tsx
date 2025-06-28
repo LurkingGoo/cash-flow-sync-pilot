@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,11 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollWheelSelect, ScrollWheelSelectContent, ScrollWheelSelectItem, ScrollWheelSelectTrigger, ScrollWheelSelectValue } from '@/components/ui/scroll-wheel-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Plus, Filter, Search, Calendar, CreditCard, TrendingDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Plus, Filter, Search, Calendar, CreditCard, TrendingDown, Target, AlertTriangle, CheckCircle, DollarSign } from 'lucide-react';
 
 interface Transaction {
   id: string;
@@ -43,6 +44,10 @@ const ExpenseTracker = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
+  const [isSettingBudget, setIsSettingBudget] = useState(false);
+  const [budgetAmount, setBudgetAmount] = useState('');
+  const [budget, setBudget] = useState<number>(0);
+  const [hoveredCategory, setHoveredCategory] = useState<any>(null);
   const { toast } = useToast();
   const pieChartRef = useRef<HTMLDivElement>(null);
 
@@ -174,15 +179,139 @@ const ExpenseTracker = () => {
     }
   };
 
+  const handleSetBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const currentDate = new Date();
+      const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      // Check if budget exists for current month
+      const { data: existingBudget } = await supabase
+        .from('budgets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month_year', monthYear)
+        .single();
+
+      if (existingBudget) {
+        // Update existing budget
+        await supabase
+          .from('budgets')
+          .update({ amount: parseFloat(budgetAmount) })
+          .eq('id', existingBudget.id);
+      } else {
+        // Create new budget
+        await supabase
+          .from('budgets')
+          .insert([{
+            user_id: user.id,
+            amount: parseFloat(budgetAmount),
+            month_year: monthYear,
+            category_id: categories[0]?.id // Default to first category
+          }]);
+      }
+
+      setBudget(parseFloat(budgetAmount));
+      setBudgetAmount('');
+      setIsSettingBudget(false);
+      
+      toast({
+        title: "Success",
+        description: "Budget set successfully!"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to set budget",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const fetchBudget = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const currentDate = new Date();
+      const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      const { data } = await supabase
+        .from('budgets')
+        .select('amount')
+        .eq('user_id', user.id)
+        .eq('month_year', monthYear)
+        .single();
+
+      if (data) {
+        setBudget(data.amount);
+      }
+    } catch (error) {
+      console.error('Error fetching budget:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBudget();
+  }, []);
+
   const getCategoryData = () => {
     const categoryMap = new Map();
     filteredTransactions.forEach(t => {
       const category = t.categories.name;
-      const existing = categoryMap.get(category) || { name: category, value: 0, color: t.categories.color };
+      const existing = categoryMap.get(category) || { 
+        name: category, 
+        value: 0, 
+        color: t.categories.color,
+        count: 0
+      };
       existing.value += Number(t.amount);
+      existing.count += 1;
       categoryMap.set(category, existing);
     });
     return Array.from(categoryMap.values());
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white/95 backdrop-blur-xl border border-slate-200 rounded-xl p-4 shadow-xl">
+          <div className="flex items-center space-x-2 mb-2">
+            <div 
+              className="w-3 h-3 rounded-full" 
+              style={{ backgroundColor: data.color }}
+            />
+            <p className="font-semibold text-slate-900">{data.name}</p>
+          </div>
+          <p className="text-slate-600">Amount: <span className="font-semibold text-slate-900">${data.value.toFixed(2)}</span></p>
+          <p className="text-slate-600">Transactions: <span className="font-semibold text-slate-900">{data.count}</span></p>
+          <p className="text-slate-600">
+            Percentage: <span className="font-semibold text-slate-900">
+              {((data.value / totalExpenses) * 100).toFixed(1)}%
+            </span>
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const getBudgetStatus = () => {
+    if (!budget) return null;
+    const percentage = (totalExpenses / budget) * 100;
+    
+    if (percentage > 100) {
+      return { status: 'over', color: 'text-red-600', icon: AlertTriangle, message: 'Over budget' };
+    } else if (percentage > 80) {
+      return { status: 'warning', color: 'text-yellow-600', icon: Target, message: 'Near budget limit' };
+    } else {
+      return { status: 'good', color: 'text-green-600', icon: CheckCircle, message: 'Within budget' };
+    }
   };
 
   const getMonthlyData = () => {
@@ -264,79 +393,160 @@ const ExpenseTracker = () => {
   const totalExpenses = filteredTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
   const categoryData = getCategoryData();
   const monthlyData = getMonthlyData();
+  const budgetStatus = getBudgetStatus();
 
   return (
     <div className="space-y-6">
       {/* Header with Actions */}
       <div className="flex justify-between items-center">
-        <div>
+        <div className="space-y-2">
           <h2 className="text-2xl font-bold text-slate-900">Expense Tracker</h2>
-          <p className="text-slate-600">Total Expenses: <span className="font-semibold text-slate-800">${totalExpenses.toFixed(2)}</span></p>
+          <div className="flex items-center space-x-4">
+            <p className="text-slate-600">
+              Total Expenses: <span className="font-semibold text-slate-800">${totalExpenses.toFixed(2)}</span>
+            </p>
+            {budget > 0 && budgetStatus && (
+              <div className="flex items-center space-x-2">
+                <budgetStatus.icon className={`h-4 w-4 ${budgetStatus.color}`} />
+                <span className={`text-sm font-medium ${budgetStatus.color}`}>
+                  ${totalExpenses.toFixed(2)} of ${budget.toFixed(2)} ({((totalExpenses / budget) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         
-        <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
-          <DialogTrigger asChild>
-            <Button className="bg-slate-800 hover:bg-slate-700 shadow-lg rounded-xl transition-all duration-200 hover:shadow-xl">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Expense
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Expense</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAddTransaction} className="space-y-4">
-              <div>
-                <Label htmlFor="amount">Amount</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  placeholder="25.50"
-                  value={newTransaction.amount}
-                  onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  placeholder="Coffee, lunch, etc."
-                  value={newTransaction.description}
-                  onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="category">Category</Label>
-                <CategoryScrollSelect 
-                  value={newTransaction.category_id} 
-                  onValueChange={(value) => setNewTransaction({...newTransaction, category_id: value})}
-                />
-              </div>
-              <div>
-                <Label htmlFor="card">Payment Method</Label>
-                <PaymentScrollSelect 
-                  value={newTransaction.card_id} 
-                  onValueChange={(value) => setNewTransaction({...newTransaction, card_id: value})}
-                />
-              </div>
-              <div>
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={newTransaction.transaction_date}
-                  onChange={(e) => setNewTransaction({...newTransaction, transaction_date: e.target.value})}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full">Add Transaction</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center space-x-3">
+          <Dialog open={isSettingBudget} onOpenChange={setIsSettingBudget}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="bg-white border-slate-200 hover:bg-slate-50 shadow-sm rounded-xl transition-all duration-200 hover:shadow-md">
+                <Target className="w-4 h-4 mr-2" />
+                Set Budget
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Set Monthly Budget</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSetBudget} className="space-y-4">
+                <div>
+                  <Label htmlFor="budget">Budget Amount</Label>
+                  <Input
+                    id="budget"
+                    type="number"
+                    step="0.01"
+                    placeholder="1000.00"
+                    value={budgetAmount}
+                    onChange={(e) => setBudgetAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full">Set Budget</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
+            <DialogTrigger asChild>
+              <Button className="bg-slate-800 hover:bg-slate-700 shadow-lg rounded-xl transition-all duration-200 hover:shadow-xl transform hover:scale-105">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Expense
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add New Expense</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddTransaction} className="space-y-4">
+                <div>
+                  <Label htmlFor="amount">Amount</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="25.50"
+                    value={newTransaction.amount}
+                    onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    placeholder="Coffee, lunch, etc."
+                    value={newTransaction.description}
+                    onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="category">Category</Label>
+                  <CategoryScrollSelect 
+                    value={newTransaction.category_id} 
+                    onValueChange={(value) => setNewTransaction({...newTransaction, category_id: value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="card">Payment Method</Label>
+                  <PaymentScrollSelect 
+                    value={newTransaction.card_id} 
+                    onValueChange={(value) => setNewTransaction({...newTransaction, card_id: value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="date">Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={newTransaction.transaction_date}
+                    onChange={(e) => setNewTransaction({...newTransaction, transaction_date: e.target.value})}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full">Add Transaction</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {/* Budget Progress Card */}
+      {budget > 0 && (
+        <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="bg-slate-200 p-2 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-slate-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-600">Monthly Budget</p>
+                  <p className="text-xl font-bold text-slate-900">${budget.toFixed(2)}</p>
+                </div>
+              </div>
+              {budgetStatus && (
+                <Badge variant={budgetStatus.status === 'over' ? 'destructive' : budgetStatus.status === 'warning' ? 'default' : 'secondary'}>
+                  {budgetStatus.message}
+                </Badge>
+              )}
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-3">
+              <div 
+                className={`h-3 rounded-full transition-all duration-500 ${
+                  budgetStatus?.status === 'over' ? 'bg-red-500' : 
+                  budgetStatus?.status === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                }`}
+                style={{ width: `${Math.min((totalExpenses / budget) * 100, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-sm text-slate-600 mt-2">
+              <span>${totalExpenses.toFixed(2)} spent</span>
+              <span>${(budget - totalExpenses).toFixed(2)} remaining</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Card */}
       <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -411,40 +621,69 @@ const ExpenseTracker = () => {
         </CardContent>
       </Card>
 
-      {/* Charts */}
+      {/* Enhanced Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+        <Card className="shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-slate-900">Expenses by Category</CardTitle>
+            <CardTitle className="text-lg text-slate-900 flex items-center space-x-2">
+              <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
+              <span>Expenses by Category</span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
-            <div 
-              ref={pieChartRef}
-              className="w-full min-h-[400px] flex items-center justify-center"
-              style={{ 
-                height: 'auto',
-                minHeight: categoryData.length > 5 ? '500px' : '400px'
-              }}
-            >
+            <div className="w-full min-h-[400px] flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={categoryData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={Math.min(120, categoryData.length > 5 ? 100 : 120)}
+                    outerRadius={120}
                     fill="#8884d8"
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     labelLine={false}
+                    onMouseEnter={(data) => setHoveredCategory(data)}
+                    onMouseLeave={() => setHoveredCategory(null)}
                   >
                     {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || '#64748b'} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color || '#64748b'} 
+                        className="cursor-pointer transition-all duration-200 hover:opacity-80"
+                      />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
+                  <Tooltip content={<CustomTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
+            </div>
+            
+            {/* Category Legend */}
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {categoryData.map((category, index) => (
+                <HoverCard key={index}>
+                  <HoverCardTrigger asChild>
+                    <div className="flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-all duration-200 transform hover:scale-105">
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: category.color }}
+                      />
+                      <span className="text-sm font-medium text-slate-700 truncate">{category.name}</span>
+                    </div>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-64 bg-white/95 backdrop-blur-xl border-slate-200">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-slate-900">{category.name}</h4>
+                      <p className="text-sm text-slate-600">Amount: ${category.value.toFixed(2)}</p>
+                      <p className="text-sm text-slate-600">Transactions: {category.count}</p>
+                      <p className="text-sm text-slate-600">
+                        Percentage: {((category.value / totalExpenses) * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              ))}
             </div>
           </CardContent>
         </Card>
