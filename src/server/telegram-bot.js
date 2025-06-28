@@ -1,3 +1,4 @@
+
 import express from 'express';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
@@ -9,7 +10,7 @@ app.use(express.json());
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+const telegramToken = '7411688025:AAGZliqNA9g8HfU_2W_NpLd4tHBcnxzv_g8';
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -35,10 +36,22 @@ async function getUserByTelegramId(telegramId) {
   return data?.user_id;
 }
 
-async function linkUser(telegramId, userId) {
+async function linkUser(telegramId, email) {
+  // Find user by email in profiles table
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .single();
+
+  if (!profile) {
+    return false;
+  }
+
   const { error } = await supabase
     .from('user_links')
-    .insert({ telegram_id: telegramId, user_id: userId });
+    .insert({ telegram_id: telegramId, user_id: profile.id });
+  
   return !error;
 }
 
@@ -124,11 +137,39 @@ async function addStockTransaction(userId, symbol, shares, price, type) {
   return !error;
 }
 
+async function setBudget(userId, categoryName, amount, monthYear) {
+  const { data: category } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', categoryName)
+    .eq('category_type', 'expense')
+    .single();
+
+  if (!category) {
+    return false;
+  }
+
+  const { error } = await supabase
+    .from('budgets')
+    .upsert({
+      user_id: userId,
+      category_id: category.id,
+      amount: amount,
+      month_year: monthYear
+    });
+
+  return !error;
+}
+
 async function getSummary(userId) {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  
   const { data: expenses } = await supabase
     .from('transactions')
     .select('amount')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .gte('transaction_date', currentMonth + '-01');
 
   const { data: holdings } = await supabase
     .from('holdings')
@@ -157,13 +198,17 @@ async function handleCommand(telegramId, command, args) {
 /link [your-email] - Link your Telegram to your account
 /balance - Show your financial summary
 
-💰 *Add Transactions:*
+💸 *Expense Management:*
 /add_expense [amount] [description] [category] [card] - Add expense
-Example: /add_expense 25.50 Coffee Dining MainCard
+Example: /add_expense 25.50 Coffee "Food & Dining" "Main Card"
 
-📈 *Stock Transactions:*
+📈 *Stock Management:*
 /add_stock [symbol] [shares] [price] [buy/sell] - Add stock transaction
 Example: /add_stock AAPL 10 150.25 buy
+
+💰 *Budget Management:*
+/set_budget [category] [amount] [month-year] - Set monthly budget
+Example: /set_budget "Food & Dining" 500 2024-06
 
 📋 *Information:*
 /categories - List available categories
@@ -173,29 +218,20 @@ Need help? Just type /help anytime!`;
 
     case '/link':
       if (args.length !== 1) {
-        return "Usage: /link [your-email]";
+        return "Usage: /link [your-email]\nExample: /link john@example.com";
       }
-      // Look up user_id by email
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', args[0])
-        .single();
-
-      if (!profile) {
-        return "❌ Email not found. Please use the email you registered with.";
-      }
-
-      const success = await linkUser(telegramId, profile.id);
+      
+      const email = args[0];
+      const success = await linkUser(telegramId, email);
       return success
-        ? "✅ Account linked successfully!"
-        : "❌ Failed to link account. Please try again.";
+        ? "✅ Account linked successfully! You can now use all bot features."
+        : "❌ Email not found. Please use the email you registered with on the dashboard.";
 
     case '/balance':
       const summary = await getSummary(userId);
       return `💰 *Your Financial Summary:*
 
-💸 Total Expenses: $${summary.totalExpenses.toFixed(2)}
+💸 This Month's Expenses: $${summary.totalExpenses.toFixed(2)}
 📊 Stock Portfolio Value: $${summary.totalStockValue.toFixed(2)}
 📈 Net Worth: $${(summary.totalStockValue - summary.totalExpenses).toFixed(2)}`;
 
@@ -209,12 +245,12 @@ Need help? Just type /help anytime!`;
 
     case '/add_expense':
       if (args.length < 4) {
-        return "Usage: /add_expense [amount] [description] [category] [card]\nExample: /add_expense 25.50 Coffee Dining MainCard";
+        return "Usage: /add_expense [amount] [description] [category] [card]\nExample: /add_expense 25.50 Coffee \"Food & Dining\" \"Main Card\"";
       }
       const amount = parseFloat(args[0]);
       const description = args[1];
-      const category = args[2];
-      const card = args[3];
+      const category = args[2].replace(/"/g, '');
+      const card = args[3].replace(/"/g, '');
 
       if (isNaN(amount)) {
         return "❌ Invalid amount. Please enter a valid number.";
@@ -243,13 +279,30 @@ Need help? Just type /help anytime!`;
         `✅ Stock transaction added: ${type.toUpperCase()} ${shares} shares of ${symbol} at $${price}` :
         "❌ Failed to add stock transaction.";
 
+    case '/set_budget':
+      if (args.length < 3) {
+        return "Usage: /set_budget [category] [amount] [month-year]\nExample: /set_budget \"Food & Dining\" 500 2024-06";
+      }
+      const budgetCategory = args[0].replace(/"/g, '');
+      const budgetAmount = parseFloat(args[1]);
+      const monthYear = args[2];
+
+      if (isNaN(budgetAmount)) {
+        return "❌ Invalid amount. Please enter a valid number.";
+      }
+
+      const budgetSuccess = await setBudget(userId, budgetCategory, budgetAmount, monthYear);
+      return budgetSuccess ?
+        `✅ Budget set: $${budgetAmount.toFixed(2)} for ${budgetCategory} in ${monthYear}` :
+        "❌ Failed to set budget. Check category name.";
+
     default:
       return "❓ Unknown command. Type /help for available commands.";
   }
 }
 
 app.post('/telegram-bot', async (req, res) => {
-  console.log('Received Telegram update:', req.body); // Add this line
+  console.log('Received Telegram update:', req.body);
   try {
     const update = req.body;
 
@@ -261,7 +314,8 @@ app.post('/telegram-bot', async (req, res) => {
       let response = '';
 
       if (text.startsWith('/')) {
-        const parts = text.split(' ');
+        // Handle quoted arguments properly
+        const parts = text.match(/\S+|"[^"]+"/g) || [];
         const command = parts[0];
         const args = parts.slice(1);
         response = await handleCommand(telegramId, command, args);

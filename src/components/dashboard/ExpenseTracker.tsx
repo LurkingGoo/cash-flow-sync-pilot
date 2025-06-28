@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Plus, Filter, Search, Calendar } from 'lucide-react';
+import { Plus, Filter, Search, Calendar, CreditCard, TrendingDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -186,10 +186,18 @@ const ExpenseTracker = () => {
   const getMonthlyData = () => {
     const monthlyMap = new Map();
     filteredTransactions.forEach(t => {
-      const month = new Date(t.transaction_date).toLocaleString('default', { month: 'short' });
+      const date = new Date(t.transaction_date);
+      const month = date.toLocaleString('default', { month: 'short', year: 'numeric' });
       monthlyMap.set(month, (monthlyMap.get(month) || 0) + Number(t.amount));
     });
-    return Array.from(monthlyMap.entries()).map(([month, amount]) => ({ month, amount }));
+    
+    const sortedEntries = Array.from(monthlyMap.entries()).sort((a, b) => {
+      const dateA = new Date(a[0]);
+      const dateB = new Date(b[0]);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    return sortedEntries.map(([month, amount]) => ({ month, amount }));
   };
 
   const months = [
@@ -221,13 +229,13 @@ const ExpenseTracker = () => {
       {/* Header with Actions */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Expense Tracker</h2>
-          <p className="text-gray-600">Total Expenses: ${totalExpenses.toFixed(2)}</p>
+          <h2 className="text-2xl font-bold text-gray-900">Expense Tracker</h2>
+          <p className="text-gray-600">Total Expenses: <span className="font-semibold text-red-600">${totalExpenses.toFixed(2)}</span></p>
         </div>
         
         <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-red-600 hover:bg-red-700 shadow-lg">
               <Plus className="w-4 h-4 mr-2" />
               Add Expense
             </Button>
@@ -243,6 +251,7 @@ const ExpenseTracker = () => {
                   id="amount"
                   type="number"
                   step="0.01"
+                  placeholder="25.50"
                   value={newTransaction.amount}
                   onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
                   required
@@ -252,6 +261,7 @@ const ExpenseTracker = () => {
                 <Label htmlFor="description">Description</Label>
                 <Input
                   id="description"
+                  placeholder="Coffee, lunch, etc."
                   value={newTransaction.description}
                   onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
                   required
@@ -266,17 +276,23 @@ const ExpenseTracker = () => {
                   <SelectContent>
                     {categories.map(category => (
                       <SelectItem key={category.id} value={category.id}>
-                        {category.name}
+                        <div className="flex items-center space-x-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: category.color }}
+                          ></div>
+                          <span>{category.name}</span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="card">Card</Label>
+                <Label htmlFor="card">Payment Method</Label>
                 <Select value={newTransaction.card_id} onValueChange={(value) => setNewTransaction({...newTransaction, card_id: value})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select card" />
+                    <SelectValue placeholder="Select payment method" />
                   </SelectTrigger>
                   <SelectContent>
                     {cards.map(card => (
@@ -303,8 +319,25 @@ const ExpenseTracker = () => {
         </Dialog>
       </div>
 
+      {/* Summary Card */}
+      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-red-600">Monthly Expenses</p>
+              <p className="text-3xl font-bold text-red-900">${totalExpenses.toFixed(2)}</p>
+              <p className="text-sm text-red-600 mt-1">{filteredTransactions.length} transactions</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <TrendingDown className="h-12 w-12 text-red-600" />
+              <CreditCard className="h-8 w-8 text-red-500" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filters */}
-      <Card className="shadow-sm">
+      <Card className="shadow-sm border-gray-200">
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center space-x-2">
@@ -333,7 +366,13 @@ const ExpenseTracker = () => {
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category.id} value={category.name}>
-                      {category.name}
+                      <div className="flex items-center space-x-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: category.color }}
+                        ></div>
+                        <span>{category.name}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -355,87 +394,120 @@ const ExpenseTracker = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle>Expenses by Category</CardTitle>
+        <Card className="shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Expenses by Category</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || '#8884d8'} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent className="pt-2">
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || '#8884d8'} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle>Monthly Breakdown</CardTitle>
+        <Card className="shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Monthly Trend</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
-                <Bar dataKey="amount" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="pt-2">
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']}
+                    contentStyle={{ 
+                      backgroundColor: 'white', 
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Bar dataKey="amount" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Transactions Table */}
-      <Card className="shadow-md">
+      <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Recent Transactions</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Card</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransactions.slice(0, 10).map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell>{new Date(transaction.transaction_date).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-medium">{transaction.description}</TableCell>
-                  <TableCell>
-                    <span 
-                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                      style={{ backgroundColor: transaction.categories.color + '20', color: transaction.categories.color }}
-                    >
-                      {transaction.categories.name}
-                    </span>
-                  </TableCell>
-                  <TableCell>{transaction.cards.name}</TableCell>
-                  <TableCell className="text-right font-semibold text-red-600">
-                    -${Number(transaction.amount).toFixed(2)}
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Payment Method</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.length > 0 ? (
+                  filteredTransactions.slice(0, 10).map((transaction) => (
+                    <TableRow key={transaction.id} className="hover:bg-gray-50">
+                      <TableCell className="font-medium">
+                        {new Date(transaction.transaction_date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{transaction.description}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: transaction.categories.color }}
+                          ></div>
+                          <span className="text-sm">{transaction.categories.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-600">{transaction.cards.name}</TableCell>
+                      <TableCell className="text-right font-semibold text-red-600">
+                        -${Number(transaction.amount).toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      No transactions found. Try adjusting your filters or add your first expense!
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -7,17 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Plus, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-
-interface Holding {
-  symbol: string;
-  shares: number;
-  average_price: number;
-  total_cost: number;
-}
 
 interface StockTransaction {
   id: string;
@@ -27,11 +20,21 @@ interface StockTransaction {
   total_amount: number;
   transaction_type: string;
   transaction_date: string;
+  notes?: string;
+}
+
+interface Holding {
+  id: string;
+  symbol: string;
+  shares: number;
+  average_price: number;
+  total_cost: number;
+  current_price?: number;
 }
 
 const StockPortfolio = () => {
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [stockTransactions, setStockTransactions] = useState<StockTransaction[]>([]);
+  const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
   const { toast } = useToast();
@@ -42,7 +45,8 @@ const StockPortfolio = () => {
     shares: '',
     price_per_share: '',
     transaction_type: 'buy',
-    transaction_date: new Date().toISOString().split('T')[0]
+    transaction_date: new Date().toISOString().split('T')[0],
+    notes: ''
   });
 
   useEffect(() => {
@@ -59,7 +63,7 @@ const StockPortfolio = () => {
           .from('holdings')
           .select('*')
           .eq('user_id', user.id)
-          .gt('shares', 0),
+          .order('symbol'),
         
         supabase
           .from('stock_transactions')
@@ -69,9 +73,9 @@ const StockPortfolio = () => {
       ]);
 
       setHoldings(holdingsData.data || []);
-      setStockTransactions(transactionsData.data || []);
+      setTransactions(transactionsData.data || []);
     } catch (error) {
-      console.error('Error fetching stock data:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -84,25 +88,51 @@ const StockPortfolio = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const totalAmount = parseFloat(newTransaction.shares) * parseFloat(newTransaction.price_per_share);
+      // Get or create stock category
+      let { data: stockCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('category_type', 'stock')
+        .limit(1)
+        .single();
+
+      if (!stockCategory) {
+        const { data: newCategory } = await supabase
+          .from('categories')
+          .insert({
+            user_id: user.id,
+            name: 'Stocks',
+            category_type: 'stock',
+            color: '#10B981'
+          })
+          .select()
+          .single();
+        stockCategory = newCategory;
+      }
+
+      const shares = parseFloat(newTransaction.shares);
+      const pricePerShare = parseFloat(newTransaction.price_per_share);
 
       const { error } = await supabase
         .from('stock_transactions')
         .insert([{
           user_id: user.id,
           symbol: newTransaction.symbol.toUpperCase(),
-          shares: parseFloat(newTransaction.shares),
-          price_per_share: parseFloat(newTransaction.price_per_share),
-          total_amount: totalAmount,
+          shares: shares,
+          price_per_share: pricePerShare,
+          total_amount: shares * pricePerShare,
           transaction_type: newTransaction.transaction_type,
-          transaction_date: newTransaction.transaction_date
+          transaction_date: newTransaction.transaction_date,
+          notes: newTransaction.notes,
+          category_id: stockCategory.id
         }]);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Stock transaction added successfully!"
+        description: `Stock transaction added: ${newTransaction.transaction_type.toUpperCase()} ${shares} shares of ${newTransaction.symbol.toUpperCase()}`
       });
 
       setNewTransaction({
@@ -110,7 +140,8 @@ const StockPortfolio = () => {
         shares: '',
         price_per_share: '',
         transaction_type: 'buy',
-        transaction_date: new Date().toISOString().split('T')[0]
+        transaction_date: new Date().toISOString().split('T')[0],
+        notes: ''
       });
 
       setIsAddingTransaction(false);
@@ -124,30 +155,34 @@ const StockPortfolio = () => {
     }
   };
 
-  const calculatePortfolioValue = () => {
-    return holdings.reduce((sum, holding) => sum + (Number(holding.shares) * Number(holding.average_price)), 0);
+  const getPortfolioValue = () => {
+    return holdings.reduce((total, holding) => {
+      const currentPrice = holding.current_price || holding.average_price;
+      return total + (holding.shares * currentPrice);
+    }, 0);
   };
 
-  const calculateTotalGainLoss = () => {
-    // This would typically require current market prices
-    // For now, we'll use a placeholder calculation
-    return Math.random() * 1000 - 500; // Random gain/loss for demo
+  const getTotalCost = () => {
+    return holdings.reduce((total, holding) => total + holding.total_cost, 0);
   };
 
-  const getHoldingsData = () => {
+  const getGainLoss = () => {
+    const portfolioValue = getPortfolioValue();
+    const totalCost = getTotalCost();
+    return portfolioValue - totalCost;
+  };
+
+  const getGainLossPercentage = () => {
+    const totalCost = getTotalCost();
+    if (totalCost === 0) return 0;
+    return (getGainLoss() / totalCost) * 100;
+  };
+
+  const getHoldingsChartData = () => {
     return holdings.map(holding => ({
-      name: holding.symbol,
-      value: Number(holding.shares) * Number(holding.average_price),
-      shares: Number(holding.shares)
-    }));
-  };
-
-  const getPerformanceData = () => {
-    // Mock performance data - in real app, this would come from market data
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    return months.map(month => ({
-      month,
-      value: Math.random() * 10000 + 5000
+      symbol: holding.symbol,
+      value: holding.shares * (holding.current_price || holding.average_price),
+      shares: holding.shares
     }));
   };
 
@@ -155,23 +190,26 @@ const StockPortfolio = () => {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
   }
 
-  const portfolioValue = calculatePortfolioValue();
-  const totalGainLoss = calculateTotalGainLoss();
-  const holdingsData = getHoldingsData();
-  const performanceData = getPerformanceData();
+  const portfolioValue = getPortfolioValue();
+  const totalCost = getTotalCost();
+  const gainLoss = getGainLoss();
+  const gainLossPercentage = getGainLossPercentage();
+  const holdingsChartData = getHoldingsChartData();
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d'];
 
   return (
     <div className="space-y-6">
       {/* Header with Actions */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Stock Portfolio</h2>
-          <p className="text-gray-600">Portfolio Value: ${portfolioValue.toFixed(2)}</p>
+          <h2 className="text-2xl font-bold text-gray-900">Stock Portfolio</h2>
+          <p className="text-gray-600">Track your investment performance</p>
         </div>
         
         <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
           <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700">
+            <Button className="bg-green-600 hover:bg-green-700 shadow-lg">
               <Plus className="w-4 h-4 mr-2" />
               Add Transaction
             </Button>
@@ -182,36 +220,40 @@ const StockPortfolio = () => {
             </DialogHeader>
             <form onSubmit={handleAddTransaction} className="space-y-4">
               <div>
-                <Label htmlFor="symbol">Symbol</Label>
+                <Label htmlFor="symbol">Stock Symbol</Label>
                 <Input
                   id="symbol"
+                  placeholder="e.g., AAPL, GOOGL, TSLA"
                   value={newTransaction.symbol}
-                  onChange={(e) => setNewTransaction({...newTransaction, symbol: e.target.value})}
-                  placeholder="e.g., AAPL"
+                  onChange={(e) => setNewTransaction({...newTransaction, symbol: e.target.value.toUpperCase()})}
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="shares">Shares</Label>
-                <Input
-                  id="shares"
-                  type="number"
-                  step="0.01"
-                  value={newTransaction.shares}
-                  onChange={(e) => setNewTransaction({...newTransaction, shares: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="price">Price per Share</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  value={newTransaction.price_per_share}
-                  onChange={(e) => setNewTransaction({...newTransaction, price_per_share: e.target.value})}
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="shares">Shares</Label>
+                  <Input
+                    id="shares"
+                    type="number"
+                    step="0.01"
+                    placeholder="10"
+                    value={newTransaction.shares}
+                    onChange={(e) => setNewTransaction({...newTransaction, shares: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="price">Price per Share</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    placeholder="150.25"
+                    value={newTransaction.price_per_share}
+                    onChange={(e) => setNewTransaction({...newTransaction, price_per_share: e.target.value})}
+                    required
+                  />
+                </div>
               </div>
               <div>
                 <Label htmlFor="type">Transaction Type</Label>
@@ -226,7 +268,7 @@ const StockPortfolio = () => {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="date">Date</Label>
+                <Label htmlFor="date">Transaction Date</Label>
                 <Input
                   id="date"
                   type="date"
@@ -235,193 +277,206 @@ const StockPortfolio = () => {
                   required
                 />
               </div>
+              <div>
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Input
+                  id="notes"
+                  placeholder="Optional notes about this transaction"
+                  value={newTransaction.notes}
+                  onChange={(e) => setNewTransaction({...newTransaction, notes: e.target.value})}
+                />
+              </div>
               <Button type="submit" className="w-full">Add Transaction</Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Portfolio Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Portfolio Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              ${portfolioValue.toFixed(2)}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Portfolio Value</p>
+                <p className="text-2xl font-bold text-blue-900">${portfolioValue.toFixed(2)}</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-blue-600" />
             </div>
-            <p className="text-xs text-green-600 mt-1">
-              Total holdings value
-            </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-gradient-to-br ${totalGainLoss >= 0 ? 'from-green-50 to-green-100 border-green-200' : 'from-red-50 to-red-100 border-red-200'} shadow-sm`}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className={`text-sm font-medium ${totalGainLoss >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-              Total Gain/Loss
-            </CardTitle>
-            {totalGainLoss >= 0 ? (
-              <TrendingUp className="h-4 w-4 text-green-600" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-600" />
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {totalGainLoss >= 0 ? '+' : ''}${totalGainLoss.toFixed(2)}
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Total Cost</p>
+                <p className="text-2xl font-bold text-green-900">${totalCost.toFixed(2)}</p>
+              </div>
+              <Activity className="h-8 w-8 text-green-600" />
             </div>
-            <p className={`text-xs mt-1 ${totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {totalGainLoss >= 0 ? 'Profit' : 'Loss'}
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Holdings</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {holdings.length}
+        <Card className={`bg-gradient-to-br ${gainLoss >= 0 ? 'from-emerald-50 to-emerald-100 border-emerald-200' : 'from-red-50 to-red-100 border-red-200'} shadow-lg`}>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${gainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Gain/Loss</p>
+                <p className={`text-2xl font-bold ${gainLoss >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>
+                  ${Math.abs(gainLoss).toFixed(2)}
+                </p>
+              </div>
+              {gainLoss >= 0 ? (
+                <TrendingUp className="h-8 w-8 text-emerald-600" />
+              ) : (
+                <TrendingDown className="h-8 w-8 text-red-600" />
+              )}
             </div>
-            <p className="text-xs text-blue-600 mt-1">
-              Different stocks
-            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-gradient-to-br ${gainLoss >= 0 ? 'from-emerald-50 to-emerald-100 border-emerald-200' : 'from-red-50 to-red-100 border-red-200'} shadow-lg`}>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${gainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Return %</p>
+                <p className={`text-2xl font-bold ${gainLoss >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>
+                  {gainLoss >= 0 ? '+' : ''}{gainLossPercentage.toFixed(2)}%
+                </p>
+              </div>
+              {gainLoss >= 0 ? (
+                <TrendingUp className="h-8 w-8 text-emerald-600" />
+              ) : (
+                <TrendingDown className="h-8 w-8 text-red-600" />
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-md">
+        <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>Portfolio Allocation</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={holdingsData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {holdingsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 60%)`} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Value']} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={holdingsChartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ symbol, percent }) => `${symbol} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {holdingsChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Value']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-md">
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Portfolio Performance</CardTitle>
+            <CardTitle>Holdings Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={performanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Value']} />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#10b981" 
-                  strokeWidth={3}
-                  dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="space-y-4">
+              {holdings.length > 0 ? (
+                holdings.map((holding) => {
+                  const currentValue = holding.shares * (holding.current_price || holding.average_price);
+                  const gainLoss = currentValue - holding.total_cost;
+                  const gainLossPercent = holding.total_cost > 0 ? (gainLoss / holding.total_cost) * 100 : 0;
+                  
+                  return (
+                    <div key={holding.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-semibold text-gray-900">{holding.symbol}</p>
+                        <p className="text-sm text-gray-600">{holding.shares} shares @ ${holding.average_price.toFixed(2)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">${currentValue.toFixed(2)}</p>
+                        <p className={`text-sm ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {gainLoss >= 0 ? '+' : ''}${gainLoss.toFixed(2)} ({gainLoss >= 0 ? '+' : ''}{gainLossPercent.toFixed(1)}%)
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No holdings yet. Add your first stock transaction!</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Holdings Table */}
-      <Card className="shadow-md">
-        <CardHeader>
-          <CardTitle>Current Holdings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Symbol</TableHead>
-                <TableHead className="text-right">Shares</TableHead>
-                <TableHead className="text-right">Avg Price</TableHead>
-                <TableHead className="text-right">Total Cost</TableHead>
-                <TableHead className="text-right">Current Value</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {holdings.map((holding, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{holding.symbol}</TableCell>
-                  <TableCell className="text-right">{Number(holding.shares).toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${Number(holding.average_price).toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${Number(holding.total_cost).toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-semibold text-green-600">
-                    ${(Number(holding.shares) * Number(holding.average_price)).toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
       {/* Recent Transactions */}
-      <Card className="shadow-md">
+      <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Recent Transactions</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Symbol</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Shares</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stockTransactions.slice(0, 10).map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell>{new Date(transaction.transaction_date).toLocaleDateString()}</TableCell>
-                  <TableCell className="font-medium">{transaction.symbol}</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      transaction.transaction_type === 'buy' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {transaction.transaction_type.toUpperCase()}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">{Number(transaction.shares).toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${Number(transaction.price_per_share).toFixed(2)}</TableCell>
-                  <TableCell className={`text-right font-semibold ${
-                    transaction.transaction_type === 'buy' ? 'text-red-600' : 'text-green-600'
-                  }`}>
-                    {transaction.transaction_type === 'buy' ? '-' : '+'}${Number(transaction.total_amount).toFixed(2)}
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Symbol</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Shares</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Notes</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {transactions.length > 0 ? (
+                  transactions.slice(0, 10).map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell>{new Date(transaction.transaction_date).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-medium">{transaction.symbol}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          transaction.transaction_type === 'buy' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {transaction.transaction_type.toUpperCase()}
+                        </span>
+                      </TableCell>
+                      <TableCell>{transaction.shares}</TableCell>
+                      <TableCell>${transaction.price_per_share.toFixed(2)}</TableCell>
+                      <TableCell className="font-semibold">
+                        ${transaction.total_amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-gray-600 text-sm">
+                        {transaction.notes || '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                      No transactions yet. Add your first stock transaction!
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
