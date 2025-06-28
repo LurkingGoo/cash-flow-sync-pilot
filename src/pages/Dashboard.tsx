@@ -12,9 +12,11 @@ import StockPortfolio from '@/components/dashboard/StockPortfolio';
 import HelpModal from '@/components/HelpModal';
 import NotificationModal from '@/components/NotificationModal';
 import SettingsModal from '@/components/SettingsModal';
+import { profileApi } from '@/lib/api';
 
 const Dashboard = () => {
   const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const navigate = useNavigate();
@@ -31,6 +33,10 @@ const Dashboard = () => {
         return;
       }
       setUser(session.user);
+      
+      // Fetch user profile
+      const profileData = await profileApi.get(session.user.id);
+      setProfile(profileData);
     } catch (error) {
       console.error('Auth error:', error);
       navigate('/auth');
@@ -41,14 +47,14 @@ const Dashboard = () => {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    navigate('/');
+    navigate('/auth');
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-600 mx-auto"></div>
           <p className="mt-4 text-slate-600">Loading dashboard...</p>
         </div>
       </div>
@@ -58,16 +64,16 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
+      <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg">
+                <div className="bg-gradient-to-r from-slate-700 to-slate-600 p-2.5 rounded-xl shadow-lg">
                   <BarChart3 className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  <h1 className="text-xl font-semibold text-slate-900">
                     Lurking Finance
                   </h1>
                   <p className="text-sm text-slate-500">Personal wealth management</p>
@@ -75,7 +81,7 @@ const Dashboard = () => {
               </div>
               
               {/* Search */}
-              <div className="hidden md:flex items-center space-x-2 bg-slate-100/60 rounded-lg px-3 py-2">
+              <div className="hidden md:flex items-center space-x-2 bg-slate-100/60 rounded-xl px-3 py-2">
                 <Search className="h-4 w-4 text-slate-400" />
                 <Input 
                   placeholder="Search transactions..." 
@@ -89,19 +95,21 @@ const Dashboard = () => {
               <NotificationModal />
               
               {/* Settings */}
-              <SettingsModal />
+              <SettingsModal profile={profile} onProfileUpdate={setProfile} />
 
               {/* Help */}
               <HelpModal userEmail={user?.email} />
               
               {/* User Profile */}
-              <div className="flex items-center space-x-3 bg-slate-100/60 rounded-lg px-3 py-2">
-                <div className="bg-blue-100 p-1.5 rounded-lg">
-                  <User className="h-4 w-4 text-blue-600" />
+              <div className="flex items-center space-x-3 bg-slate-100/60 rounded-xl px-3 py-2 hover:bg-slate-200/60 transition-colors duration-200">
+                <div className="bg-slate-200 p-1.5 rounded-lg">
+                  <User className="h-4 w-4 text-slate-600" />
                 </div>
                 <div className="text-sm">
-                  <p className="font-medium text-slate-900">{user?.email?.split('@')[0]}</p>
-                  <p className="text-xs text-slate-500">Premium</p>
+                  <p className="font-medium text-slate-900">
+                    {profile?.full_name || user?.email?.split('@')[0]}
+                  </p>
+                  <p className="text-xs text-slate-500">Member</p>
                 </div>
               </div>
               
@@ -109,7 +117,7 @@ const Dashboard = () => {
                 onClick={handleSignOut}
                 variant="ghost"
                 size="sm"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-200"
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -129,21 +137,21 @@ const Dashboard = () => {
           <TabsList className="grid w-full grid-cols-3 mb-8 bg-white shadow-sm rounded-xl p-1.5 border border-slate-200/50">
             <TabsTrigger 
               value="overview" 
-              className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-700 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg transition-all duration-200"
+              className="flex items-center space-x-2 data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-lg transition-all duration-200 hover:bg-slate-50"
             >
               <BarChart3 className="h-4 w-4" />
               <span className="font-medium">Overview</span>
             </TabsTrigger>
             <TabsTrigger 
               value="expenses" 
-              className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg transition-all duration-200"
+              className="flex items-center space-x-2 data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-lg transition-all duration-200 hover:bg-slate-50"
             >
               <CreditCard className="h-4 w-4" />
               <span className="font-medium">Expenses</span>
             </TabsTrigger>
             <TabsTrigger 
               value="stocks" 
-              className="flex items-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg transition-all duration-200"
+              className="flex items-center space-x-2 data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-lg transition-all duration-200 hover:bg-slate-50"
             >
               <TrendingUp className="h-4 w-4" />
               <span className="font-medium">Portfolio</span>

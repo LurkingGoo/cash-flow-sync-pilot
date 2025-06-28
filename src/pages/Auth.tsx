@@ -1,58 +1,49 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BarChart3, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { BarChart3 } from 'lucide-react';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        navigate('/dashboard');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
+    
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: fullName,
+          }
+        }
       });
 
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Welcome back!",
-          description: "Successfully signed in to Lurking Finance.",
-        });
-      }
-    } catch (error) {
+      if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: "Please check your email to verify your account.",
+      });
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -60,35 +51,22 @@ const Auth = () => {
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
+    
     try {
-      const { error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`
-        }
       });
 
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Account created!",
-          description: "Check your email to confirm your account.",
-        });
-      }
-    } catch (error) {
+      if (error) throw error;
+      navigate('/dashboard');
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -97,106 +75,163 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 p-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Logo Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-6">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-2xl shadow-2xl">
+        
+        {/* Logo and Header */}
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-600 p-4 rounded-2xl shadow-lg">
               <BarChart3 className="h-10 w-10 text-white" />
             </div>
-            <div className="ml-4">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Lurking Finance
-              </h1>
-              <p className="text-sm text-slate-500">Personal wealth management</p>
-            </div>
           </div>
-          <p className="text-lg text-slate-600">Welcome to your financial dashboard</p>
+          <div>
+            <h1 className="text-3xl font-semibold text-slate-900">
+              Lurking Finance
+            </h1>
+            <p className="text-slate-600 mt-2">Personal wealth management dashboard</p>
+          </div>
         </div>
 
-        <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-          <CardHeader className="text-center pb-6">
-            <CardTitle className="text-2xl font-semibold text-slate-800">Get Started</CardTitle>
+        <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+          <CardHeader className="text-center pb-4">
+            <CardTitle className="text-xl text-slate-900">Welcome</CardTitle>
             <CardDescription className="text-slate-600">
-              Sign in to manage your finances with ease
+              Sign in to your account or create a new one
             </CardDescription>
           </CardHeader>
+          
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="signin" className="text-sm font-medium">Sign In</TabsTrigger>
-                <TabsTrigger value="signup" className="text-sm font-medium">Sign Up</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-100">
+                <TabsTrigger 
+                  value="signin" 
+                  className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                >
+                  Sign In
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="signup"
+                  className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                >
+                  Sign Up
+                </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-5">
+                <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm font-medium text-slate-700">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="h-11 bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
+                    <Label htmlFor="signin-email" className="text-slate-700">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="Enter your email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 h-11 border-slate-200 focus:border-slate-400"
+                        required
+                      />
+                    </div>
                   </div>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-sm font-medium text-slate-700">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="h-11 bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
+                    <Label htmlFor="signin-password" className="text-slate-700">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="signin-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10 h-11 border-slate-200 focus:border-slate-400"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
+                  
                   <Button 
                     type="submit" 
-                    className="w-full h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium shadow-lg" 
+                    className="w-full h-11 bg-slate-800 hover:bg-slate-700 text-white font-medium shadow-lg transition-all duration-200"
                     disabled={loading}
                   >
-                    {loading ? 'Signing in...' : 'Sign In'}
+                    {loading ? "Signing in..." : "Sign In"}
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-5">
+                <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="text-sm font-medium text-slate-700">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="h-11 bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
+                    <Label htmlFor="signup-name" className="text-slate-700">Full Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="Enter your full name"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="pl-10 h-11 border-slate-200 focus:border-slate-400"
+                        required
+                      />
+                    </div>
                   </div>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="text-sm font-medium text-slate-700">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create a password"
-                      className="h-11 bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
+                    <Label htmlFor="signup-email" className="text-slate-700">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="Enter your email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 h-11 border-slate-200 focus:border-slate-400"
+                        required
+                      />
+                    </div>
                   </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password" className="text-slate-700">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="signup-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10 h-11 border-slate-200 focus:border-slate-400"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  
                   <Button 
                     type="submit" 
-                    className="w-full h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium shadow-lg" 
+                    className="w-full h-11 bg-slate-800 hover:bg-slate-700 text-white font-medium shadow-lg transition-all duration-200"
                     disabled={loading}
                   >
-                    {loading ? 'Creating account...' : 'Create Account'}
+                    {loading ? "Creating account..." : "Create Account"}
                   </Button>
                 </form>
               </TabsContent>
@@ -206,9 +241,9 @@ const Auth = () => {
 
         <div className="text-center">
           <p className="text-sm text-slate-500">
-            🤖 Connect with our Telegram bot for quick expense tracking!
+            Secure financial management platform
           </p>
-          <p className="text-xs text-slate-400 mt-2">© 2024 Lucas Koh. All rights reserved.</p>
+          <p className="text-xs text-slate-400 mt-1">© 2024 Lucas Koh. All rights reserved.</p>
         </div>
       </div>
     </div>
