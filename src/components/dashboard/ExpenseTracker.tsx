@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -216,6 +215,45 @@ const ExpenseTracker = () => {
     { value: '2024-12', label: 'December 2024' }
   ];
 
+  const CategorySelect = ({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) => (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Select category" />
+      </SelectTrigger>
+      <SelectContent className="max-h-64">
+        {categories.map(category => (
+          <SelectItem key={category.id} value={category.id} className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 w-full">
+              <div 
+                className="w-3 h-3 rounded-full flex-shrink-0" 
+                style={{ backgroundColor: category.color }}
+              ></div>
+              <span className="truncate">{category.name}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const PaymentSelect = ({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) => (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Select payment method" />
+      </SelectTrigger>
+      <SelectContent className="max-h-64">
+        {cards.map(card => (
+          <SelectItem key={card.id} value={card.id}>
+            <div className="flex items-center space-x-2">
+              <CreditCard className="h-3 w-3" />
+              <span>{card.name}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
   }
@@ -229,8 +267,8 @@ const ExpenseTracker = () => {
       {/* Header with Actions */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Expense Tracker</h2>
-          <p className="text-gray-600">Total Expenses: <span className="font-semibold text-red-600">${totalExpenses.toFixed(2)}</span></p>
+          <h2 className="text-2xl font-bold text-slate-900">Expense Tracker</h2>
+          <p className="text-slate-600">Total Expenses: <span className="font-semibold text-red-600">${totalExpenses.toFixed(2)}</span></p>
         </div>
         
         <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
@@ -269,39 +307,17 @@ const ExpenseTracker = () => {
               </div>
               <div>
                 <Label htmlFor="category">Category</Label>
-                <Select value={newTransaction.category_id} onValueChange={(value) => setNewTransaction({...newTransaction, category_id: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category.id} value={category.id}>
-                        <div className="flex items-center space-x-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: category.color }}
-                          ></div>
-                          <span>{category.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CategorySelect 
+                  value={newTransaction.category_id} 
+                  onValueChange={(value) => setNewTransaction({...newTransaction, category_id: value})}
+                />
               </div>
               <div>
                 <Label htmlFor="card">Payment Method</Label>
-                <Select value={newTransaction.card_id} onValueChange={(value) => setNewTransaction({...newTransaction, card_id: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cards.map(card => (
-                      <SelectItem key={card.id} value={card.id}>
-                        {card.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PaymentSelect 
+                  value={newTransaction.card_id} 
+                  onValueChange={(value) => setNewTransaction({...newTransaction, card_id: value})}
+                />
               </div>
               <div>
                 <Label htmlFor="date">Date</Label>
@@ -337,11 +353,11 @@ const ExpenseTracker = () => {
       </Card>
 
       {/* Filters */}
-      <Card className="shadow-sm border-gray-200">
+      <Card className="shadow-sm border-slate-200">
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-gray-500" />
+              <Calendar className="w-4 h-4 text-slate-500" />
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -357,7 +373,7 @@ const ExpenseTracker = () => {
             </div>
 
             <div className="flex items-center space-x-2">
-              <Filter className="w-4 h-4 text-gray-500" />
+              <Filter className="w-4 h-4 text-slate-500" />
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="All Categories" />
@@ -380,7 +396,7 @@ const ExpenseTracker = () => {
             </div>
 
             <div className="flex items-center space-x-2">
-              <Search className="w-4 h-4 text-gray-500" />
+              <Search className="w-4 h-4 text-slate-500" />
               <Input
                 placeholder="Search transactions..."
                 value={searchTerm}
@@ -399,14 +415,14 @@ const ExpenseTracker = () => {
             <CardTitle className="text-lg">Expenses by Category</CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
-            <div className="h-80 w-full">
+            <div className="w-full" style={{ height: '400px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={categoryData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={100}
+                    outerRadius={120}
                     fill="#8884d8"
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
@@ -428,9 +444,9 @@ const ExpenseTracker = () => {
             <CardTitle className="text-lg">Monthly Trend</CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
-            <div className="h-80 w-full">
+            <div className="w-full" style={{ height: '400px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis 
                     dataKey="month" 
@@ -478,7 +494,7 @@ const ExpenseTracker = () => {
               <TableBody>
                 {filteredTransactions.length > 0 ? (
                   filteredTransactions.slice(0, 10).map((transaction) => (
-                    <TableRow key={transaction.id} className="hover:bg-gray-50">
+                    <TableRow key={transaction.id} className="hover:bg-slate-50">
                       <TableCell className="font-medium">
                         {new Date(transaction.transaction_date).toLocaleDateString()}
                       </TableCell>
@@ -492,7 +508,7 @@ const ExpenseTracker = () => {
                           <span className="text-sm">{transaction.categories.name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-gray-600">{transaction.cards.name}</TableCell>
+                      <TableCell className="text-slate-600">{transaction.cards.name}</TableCell>
                       <TableCell className="text-right font-semibold text-red-600">
                         -${Number(transaction.amount).toFixed(2)}
                       </TableCell>
@@ -500,7 +516,7 @@ const ExpenseTracker = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">
                       No transactions found. Try adjusting your filters or add your first expense!
                     </TableCell>
                   </TableRow>
