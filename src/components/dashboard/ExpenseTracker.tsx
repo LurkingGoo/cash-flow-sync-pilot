@@ -220,7 +220,7 @@ const ExpenseTracker = () => {
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select category" />
       </SelectTrigger>
-      <SelectContent className="max-h-64">
+      <SelectContent className="max-h-64 overflow-y-auto">
         {categories.map(category => (
           <SelectItem key={category.id} value={category.id} className="flex items-center space-x-2">
             <div className="flex items-center space-x-2 w-full">
@@ -241,7 +241,7 @@ const ExpenseTracker = () => {
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select payment method" />
       </SelectTrigger>
-      <SelectContent className="max-h-64">
+      <SelectContent className="max-h-64 overflow-y-auto">
         {cards.map(card => (
           <SelectItem key={card.id} value={card.id}>
             <div className="flex items-center space-x-2">
@@ -362,7 +362,7 @@ const ExpenseTracker = () => {
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-64 overflow-y-auto">
                   {months.map(month => (
                     <SelectItem key={month.value} value={month.value}>
                       {month.label}
@@ -378,7 +378,7 @@ const ExpenseTracker = () => {
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-64 overflow-y-auto">
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category.id} value={category.name}>
