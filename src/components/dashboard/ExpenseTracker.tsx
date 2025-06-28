@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollWheelSelect, ScrollWheelSelectContent, ScrollWheelSelectItem, ScrollWheelSelectTrigger, ScrollWheelSelectValue } from '@/components/ui/scroll-wheel-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Plus, Filter, Search, Calendar, CreditCard, TrendingDown } from 'lucide-react';
@@ -42,6 +44,7 @@ const ExpenseTracker = () => {
   const [loading, setLoading] = useState(true);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
   const { toast } = useToast();
+  const pieChartRef = useRef<HTMLDivElement>(null);
 
   // Form state
   const [newTransaction, setNewTransaction] = useState({
@@ -215,14 +218,14 @@ const ExpenseTracker = () => {
     { value: '2024-12', label: 'December 2024' }
   ];
 
-  const CategorySelect = ({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) => (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Select category" />
-      </SelectTrigger>
-      <SelectContent className="max-h-64 overflow-y-auto">
+  const CategoryScrollSelect = ({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) => (
+    <ScrollWheelSelect value={value} onValueChange={onValueChange}>
+      <ScrollWheelSelectTrigger className="w-full">
+        <ScrollWheelSelectValue placeholder="Select category" />
+      </ScrollWheelSelectTrigger>
+      <ScrollWheelSelectContent>
         {categories.map(category => (
-          <SelectItem key={category.id} value={category.id} className="flex items-center space-x-2">
+          <ScrollWheelSelectItem key={category.id} value={category.id}>
             <div className="flex items-center space-x-2 w-full">
               <div 
                 className="w-3 h-3 rounded-full flex-shrink-0" 
@@ -230,28 +233,28 @@ const ExpenseTracker = () => {
               ></div>
               <span className="truncate">{category.name}</span>
             </div>
-          </SelectItem>
+          </ScrollWheelSelectItem>
         ))}
-      </SelectContent>
-    </Select>
+      </ScrollWheelSelectContent>
+    </ScrollWheelSelect>
   );
 
-  const PaymentSelect = ({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) => (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Select payment method" />
-      </SelectTrigger>
-      <SelectContent className="max-h-64 overflow-y-auto">
+  const PaymentScrollSelect = ({ value, onValueChange }: { value: string; onValueChange: (value: string) => void }) => (
+    <ScrollWheelSelect value={value} onValueChange={onValueChange}>
+      <ScrollWheelSelectTrigger className="w-full">
+        <ScrollWheelSelectValue placeholder="Select payment method" />
+      </ScrollWheelSelectTrigger>
+      <ScrollWheelSelectContent>
         {cards.map(card => (
-          <SelectItem key={card.id} value={card.id}>
+          <ScrollWheelSelectItem key={card.id} value={card.id}>
             <div className="flex items-center space-x-2">
               <CreditCard className="h-3 w-3" />
               <span>{card.name}</span>
             </div>
-          </SelectItem>
+          </ScrollWheelSelectItem>
         ))}
-      </SelectContent>
-    </Select>
+      </ScrollWheelSelectContent>
+    </ScrollWheelSelect>
   );
 
   if (loading) {
@@ -268,12 +271,12 @@ const ExpenseTracker = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Expense Tracker</h2>
-          <p className="text-slate-600">Total Expenses: <span className="font-semibold text-red-600">${totalExpenses.toFixed(2)}</span></p>
+          <p className="text-slate-600">Total Expenses: <span className="font-semibold text-slate-800">${totalExpenses.toFixed(2)}</span></p>
         </div>
         
         <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
           <DialogTrigger asChild>
-            <Button className="bg-red-600 hover:bg-red-700 shadow-lg">
+            <Button className="bg-slate-800 hover:bg-slate-700 shadow-lg rounded-xl transition-all duration-200 hover:shadow-xl">
               <Plus className="w-4 h-4 mr-2" />
               Add Expense
             </Button>
@@ -307,14 +310,14 @@ const ExpenseTracker = () => {
               </div>
               <div>
                 <Label htmlFor="category">Category</Label>
-                <CategorySelect 
+                <CategoryScrollSelect 
                   value={newTransaction.category_id} 
                   onValueChange={(value) => setNewTransaction({...newTransaction, category_id: value})}
                 />
               </div>
               <div>
                 <Label htmlFor="card">Payment Method</Label>
-                <PaymentSelect 
+                <PaymentScrollSelect 
                   value={newTransaction.card_id} 
                   onValueChange={(value) => setNewTransaction({...newTransaction, card_id: value})}
                 />
@@ -336,17 +339,17 @@ const ExpenseTracker = () => {
       </div>
 
       {/* Summary Card */}
-      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-lg">
+      <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-red-600">Monthly Expenses</p>
-              <p className="text-3xl font-bold text-red-900">${totalExpenses.toFixed(2)}</p>
-              <p className="text-sm text-red-600 mt-1">{filteredTransactions.length} transactions</p>
+              <p className="text-sm font-medium text-slate-600">Monthly Expenses</p>
+              <p className="text-3xl font-bold text-slate-900">${totalExpenses.toFixed(2)}</p>
+              <p className="text-sm text-slate-600 mt-1">{filteredTransactions.length} transactions</p>
             </div>
             <div className="flex items-center space-x-4">
-              <TrendingDown className="h-12 w-12 text-red-600" />
-              <CreditCard className="h-8 w-8 text-red-500" />
+              <TrendingDown className="h-12 w-12 text-slate-600" />
+              <CreditCard className="h-8 w-8 text-slate-500" />
             </div>
           </div>
         </CardContent>
@@ -362,7 +365,7 @@ const ExpenseTracker = () => {
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="max-h-64 overflow-y-auto">
+                <SelectContent>
                   {months.map(month => (
                     <SelectItem key={month.value} value={month.value}>
                       {month.label}
@@ -378,7 +381,7 @@ const ExpenseTracker = () => {
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
-                <SelectContent className="max-h-64 overflow-y-auto">
+                <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category.id} value={category.name}>
@@ -410,26 +413,33 @@ const ExpenseTracker = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-lg">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Expenses by Category</CardTitle>
+            <CardTitle className="text-lg text-slate-900">Expenses by Category</CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
-            <div className="w-full" style={{ height: '400px' }}>
+            <div 
+              ref={pieChartRef}
+              className="w-full min-h-[400px] flex items-center justify-center"
+              style={{ 
+                height: 'auto',
+                minHeight: categoryData.length > 5 ? '500px' : '400px'
+              }}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={categoryData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={120}
+                    outerRadius={Math.min(120, categoryData.length > 5 ? 100 : 120)}
                     fill="#8884d8"
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     labelLine={false}
                   >
                     {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || '#8884d8'} />
+                      <Cell key={`cell-${index}`} fill={entry.color || '#64748b'} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
@@ -439,9 +449,9 @@ const ExpenseTracker = () => {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Monthly Trend</CardTitle>
+            <CardTitle className="text-lg text-slate-900">Monthly Trend</CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
             <div className="w-full" style={{ height: '400px' }}>
@@ -466,7 +476,7 @@ const ExpenseTracker = () => {
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                     }}
                   />
-                  <Bar dataKey="amount" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="amount" fill="#64748b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
