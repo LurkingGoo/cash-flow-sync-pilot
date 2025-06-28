@@ -2,43 +2,40 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, CreditCard, AlertTriangle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { TrendingUp, TrendingDown, DollarSign, CreditCard, PieChart as PieChartIcon, Target } from 'lucide-react';
 
-interface OverviewData {
+interface DashboardData {
   totalExpenses: number;
   totalStockValue: number;
   monthlyExpenses: Array<{ month: string; amount: number }>;
-  categoryExpenses: Array<{ name: string; value: number; color: string }>;
-  budgetAlerts: Array<{ category: string; spent: number; budget: number }>;
-  monthlyGainLoss: number;
+  categoryBreakdown: Array<{ name: string; value: number; color: string }>;
+  budgetStatus: Array<{ category: string; spent: number; budget: number; percentage: number }>;
 }
 
 const Overview = () => {
-  const [data, setData] = useState<OverviewData>({
+  const [data, setData] = useState<DashboardData>({
     totalExpenses: 0,
     totalStockValue: 0,
     monthlyExpenses: [],
-    categoryExpenses: [],
-    budgetAlerts: [],
-    monthlyGainLoss: 0
+    categoryBreakdown: [],
+    budgetStatus: []
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchOverviewData();
+    fetchDashboardData();
   }, []);
 
-  const fetchOverviewData = async () => {
+  const fetchDashboardData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get current month expenses
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().toISOString().slice(0, 7);
 
+      // Fetch expenses for current year
       const { data: transactions } = await supabase
         .from('transactions')
         .select(`
@@ -47,211 +44,311 @@ const Overview = () => {
           categories!inner(name, color)
         `)
         .eq('user_id', user.id)
-        .gte('transaction_date', startOfMonth.toISOString().split('T')[0]);
+        .gte('transaction_date', `${currentYear}-01-01`);
 
-      // Get holdings
+      // Fetch stock holdings
       const { data: holdings } = await supabase
         .from('holdings')
-        .select('*')
-        .eq('user_id', user.id)
-        .gt('shares', 0);
+        .select('shares, average_price, current_price')
+        .eq('user_id', user.id);
 
-      // Get last 6 months of expenses
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-      const { data: monthlyData } = await supabase
-        .from('transactions')
-        .select('amount, transaction_date')
+      // Fetch budgets for current month
+      const { data: budgets } = await supabase
+        .from('budgets')
+        .select(`
+          amount,
+          categories!inner(name, color)
+        `)
         .eq('user_id', user.id)
-        .gte('transaction_date', sixMonthsAgo.toISOString().split('T')[0]);
+        .eq('month_year', currentMonth);
 
       // Process data
       const totalExpenses = transactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const totalStockValue = holdings?.reduce((sum, h) => sum + (Number(h.shares) * Number(h.average_price)), 0) || 0;
-
-      // Category expenses
-      const categoryMap = new Map();
-      transactions?.forEach(t => {
-        const category = t.categories.name;
-        const existing = categoryMap.get(category) || { name: category, value: 0, color: t.categories.color };
-        existing.value += Number(t.amount);
-        categoryMap.set(category, existing);
-      });
+      const totalStockValue = holdings?.reduce((sum, h) => 
+        sum + (Number(h.shares) * (Number(h.current_price) || Number(h.average_price))), 0) || 0;
 
       // Monthly expenses
       const monthlyMap = new Map();
-      monthlyData?.forEach(t => {
-        const month = new Date(t.transaction_date).toLocaleString('default', { month: 'short', year: '2-digit' });
+      transactions?.forEach(t => {
+        const date = new Date(t.transaction_date);
+        const month = date.toLocaleString('default', { month: 'short' });
         monthlyMap.set(month, (monthlyMap.get(month) || 0) + Number(t.amount));
       });
+      const monthlyExpenses = Array.from(monthlyMap.entries())
+        .map(([month, amount]) => ({ month, amount }))
+        .sort((a, b) => {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return months.indexOf(a.month) - months.indexOf(b.month);
+        });
 
-      const monthlyExpenses = Array.from(monthlyMap.entries()).map(([month, amount]) => ({
-        month,
-        amount
-      })).sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+      // Category breakdown
+      const categoryMap = new Map();
+      transactions?.forEach(t => {
+        const category = t.categories.name;
+        const existing = categoryMap.get(category) || { 
+          name: category, 
+          value: 0, 
+          color: t.categories.color 
+        };
+        existing.value += Number(t.amount);
+        categoryMap.set(category, existing);
+      });
+      const categoryBreakdown = Array.from(categoryMap.values());
+
+      // Budget status (mock data for now since we need to calculate spent vs budget)
+      const budgetStatus = budgets?.map(budget => {
+        const categorySpent = categoryMap.get(budget.categories.name)?.value || 0;
+        const budgetAmount = Number(budget.amount);
+        return {
+          category: budget.categories.name,
+          spent: categorySpent,
+          budget: budgetAmount,
+          percentage: budgetAmount > 0 ? (categorySpent / budgetAmount) * 100 : 0
+        };
+      }) || [];
 
       setData({
         totalExpenses,
         totalStockValue,
         monthlyExpenses,
-        categoryExpenses: Array.from(categoryMap.values()),
-        budgetAlerts: [], // TODO: Implement budget alerts
-        monthlyGainLoss: totalExpenses > 0 ? ((totalExpenses - (monthlyExpenses[monthlyExpenses.length - 2]?.amount || 0)) / (monthlyExpenses[monthlyExpenses.length - 2]?.amount || 1)) * 100 : 0
+        categoryBreakdown,
+        budgetStatus
       });
+
     } catch (error) {
-      console.error('Error fetching overview data:', error);
+      console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return <div className="flex items-center justify-center h-64">Loading dashboard...</div>;
   }
 
   const netWorth = data.totalStockValue - data.totalExpenses;
+  const CHART_COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
 
   return (
     <div className="space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Net Worth</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${netWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ${netWorth.toFixed(2)}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Net Worth</p>
+                <p className="text-2xl font-bold text-blue-900">${netWorth.toFixed(2)}</p>
+                <p className="text-xs text-blue-600">Total portfolio value</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-blue-600" />
             </div>
-            <p className="text-xs text-blue-600 mt-1">
-              {netWorth >= 0 ? 'Positive' : 'Negative'} balance
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-red-700">Monthly Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              ${data.totalExpenses.toFixed(2)}
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-red-600">Total Expenses</p>
+                <p className="text-2xl font-bold text-red-900">${data.totalExpenses.toFixed(2)}</p>
+                <p className="text-xs text-red-600">This year</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-red-600" />
             </div>
-            <p className={`text-xs mt-1 ${data.monthlyGainLoss > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {data.monthlyGainLoss > 0 ? '+' : ''}{data.monthlyGainLoss.toFixed(1)}% from last month
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Stock Portfolio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              ${data.totalStockValue.toFixed(2)}
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Stock Portfolio</p>
+                <p className="text-2xl font-bold text-green-900">${data.totalStockValue.toFixed(2)}</p>
+                <p className="text-xs text-green-600">Current value</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-600" />
             </div>
-            <p className="text-xs text-green-600 mt-1">
-              Total holdings value
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Budget Status</CardTitle>
-            <CreditCard className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
-              ${Math.max(0, 2000 - data.totalExpenses).toFixed(2)}
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Monthly Avg</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  ${data.monthlyExpenses.length > 0 ? 
+                    (data.totalExpenses / data.monthlyExpenses.length).toFixed(2) : 
+                    '0.00'
+                  }
+                </p>
+                <p className="text-xs text-purple-600">Expense average</p>
+              </div>
+              <PieChartIcon className="h-8 w-8 text-purple-600" />
             </div>
-            <p className="text-xs text-purple-600 mt-1">
-              Budget remaining
-            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
+      {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Expense Breakdown</CardTitle>
+        {/* Monthly Expenses Trend */}
+        <Card className="shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Monthly Expenses Trend</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={data.categoryExpenses}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={120}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {data.categoryExpenses.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || '#8884d8'} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent className="pt-2">
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.monthlyExpenses} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Expenses']}
+                    contentStyle={{ 
+                      backgroundColor: 'white', 
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="#ef4444" 
+                    strokeWidth={3}
+                    dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Monthly Spending Trend</CardTitle>
+        {/* Category Breakdown */}
+        <Card className="shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Expense Categories</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.monthlyExpenses}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Expenses']} />
-                <Line 
-                  type="monotone" 
-                  dataKey="amount" 
-                  stroke="#ef4444" 
-                  strokeWidth={3}
-                  dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent className="pt-2">
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={data.categoryBreakdown}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {data.categoryBreakdown.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Amount']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Budget Alerts */}
-      {data.budgetAlerts.length > 0 && (
-        <Card className="border-orange-200 bg-orange-50 shadow-sm">
+      {/* Budget Status */}
+      {data.budgetStatus.length > 0 && (
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-orange-800 flex items-center">
-              <AlertTriangle className="mr-2 h-5 w-5" />
-              Budget Alerts
+            <CardTitle className="flex items-center">
+              <Target className="h-5 w-5 mr-2" />
+              Budget Status
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {data.budgetAlerts.map((alert, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-white rounded-lg border border-orange-200">
-                  <span className="font-medium text-orange-900">{alert.category}</span>
-                  <span className="text-orange-600">
-                    ${alert.spent.toFixed(2)} / ${alert.budget.toFixed(2)}
-                  </span>
+            <div className="space-y-4">
+              {data.budgetStatus.map((budget, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">{budget.category}</span>
+                    <span className="text-sm text-gray-600">
+                      ${budget.spent.toFixed(2)} / ${budget.budget.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        budget.percentage > 100 ? 'bg-red-500' : 
+                        budget.percentage > 80 ? 'bg-yellow-500' : 
+                        'bg-green-500'
+                      }`}
+                      style={{ width: `${Math.min(budget.percentage, 100)}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>{budget.percentage.toFixed(1)}% used</span>
+                    {budget.percentage > 100 && (
+                      <span className="text-red-600 font-medium">
+                        ${(budget.spent - budget.budget).toFixed(2)} over budget
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-white shadow-sm border border-gray-200">
+          <CardContent className="p-6 text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">This Month</h3>
+            <p className="text-2xl font-bold text-blue-600">
+              ${data.monthlyExpenses.length > 0 ? 
+                data.monthlyExpenses[data.monthlyExpenses.length - 1]?.amount.toFixed(2) || '0.00' : 
+                '0.00'
+              }
+            </p>
+            <p className="text-sm text-gray-500">Current month expenses</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white shadow-sm border border-gray-200">
+          <CardContent className="p-6 text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Top Category</h3>
+            <p className="text-2xl font-bold text-green-600">
+              {data.categoryBreakdown.length > 0 ? 
+                data.categoryBreakdown.reduce((prev, current) => 
+                  (prev.value > current.value) ? prev : current
+                ).name : 
+                'N/A'
+              }
+            </p>
+            <p className="text-sm text-gray-500">Highest spending category</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white shadow-sm border border-gray-200">
+          <CardContent className="p-6 text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Financial Health</h3>
+            <div className="flex items-center justify-center">
+              {netWorth >= 0 ? (
+                <TrendingUp className="h-8 w-8 text-green-500 mr-2" />
+              ) : (
+                <TrendingDown className="h-8 w-8 text-red-500 mr-2" />
+              )}
+              <span className={`text-2xl font-bold ${netWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {netWorth >= 0 ? 'Positive' : 'Negative'}
+              </span>
+            </div>
+            <p className="text-sm text-gray-500">Net worth status</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
