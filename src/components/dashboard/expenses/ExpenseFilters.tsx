@@ -32,6 +32,7 @@ const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
 }) => {
   const months = [
     { value: 'all', label: 'All Months' },
+    // 2024 months
     { value: '2024-01', label: 'January 2024' },
     { value: '2024-02', label: 'February 2024' },
     { value: '2024-03', label: 'March 2024' },
@@ -43,7 +44,20 @@ const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
     { value: '2024-09', label: 'September 2024' },
     { value: '2024-10', label: 'October 2024' },
     { value: '2024-11', label: 'November 2024' },
-    { value: '2024-12', label: 'December 2024' }
+    { value: '2024-12', label: 'December 2024' },
+    // 2025 months
+    { value: '2025-01', label: 'January 2025' },
+    { value: '2025-02', label: 'February 2025' },
+    { value: '2025-03', label: 'March 2025' },
+    { value: '2025-04', label: 'April 2025' },
+    { value: '2025-05', label: 'May 2025' },
+    { value: '2025-06', label: 'June 2025' },
+    { value: '2025-07', label: 'July 2025' },
+    { value: '2025-08', label: 'August 2025' },
+    { value: '2025-09', label: 'September 2025' },
+    { value: '2025-10', label: 'October 2025' },
+    { value: '2025-11', label: 'November 2025' },
+    { value: '2025-12', label: 'December 2025' }
   ];
 
   return (
