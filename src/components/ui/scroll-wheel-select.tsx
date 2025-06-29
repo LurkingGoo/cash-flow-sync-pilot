@@ -33,38 +33,45 @@ ScrollWheelSelectTrigger.displayName = SelectPrimitive.Trigger.displayName
 const ScrollWheelSelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
-  <SelectPrimitive.Portal>
-    <SelectPrimitive.Content
-      ref={ref}
-      className={cn(
-        "relative z-50 max-h-[min(400px,60vh)] min-w-[var(--radix-select-trigger-width)] max-w-[min(500px,90vw)] overflow-hidden rounded-xl border border-slate-200/60 bg-white/95 backdrop-blur-xl shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200",
-        position === "popper" &&
-          "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
-        className
-      )}
-      position={position}
-      {...props}
-    >
-      <SelectPrimitive.Viewport
+>(({ className, children, position = "popper", ...props }, ref) => {
+  const handleWheel = React.useCallback((e: React.WheelEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  return (
+    <SelectPrimitive.Portal>
+      <SelectPrimitive.Content
+        ref={ref}
         className={cn(
-          "p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/60 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60 scroll-smooth",
+          "relative z-50 max-h-[200px] min-w-[var(--radix-select-trigger-width)] max-w-[min(500px,90vw)] overflow-hidden rounded-xl border border-slate-200/60 bg-white/95 backdrop-blur-xl shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200",
           position === "popper" &&
-            "w-full min-w-[var(--radix-select-trigger-width)]"
+            "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          className
         )}
-        style={{
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(203, 213, 225, 0.6) transparent',
-          maxHeight: 'min(350px, 60vh)'
-        }}
+        position={position}
+        onWheel={handleWheel}
+        {...props}
       >
-        <div className="space-y-1">
-          {children}
-        </div>
-      </SelectPrimitive.Viewport>
-    </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
-))
+        <SelectPrimitive.Viewport
+          className={cn(
+            "p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/60 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60 scroll-smooth max-h-[180px]",
+            position === "popper" &&
+              "w-full min-w-[var(--radix-select-trigger-width)]"
+          )}
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(203, 213, 225, 0.6) transparent'
+          }}
+          onWheel={handleWheel}
+        >
+          <div className="space-y-1">
+            {children}
+          </div>
+        </SelectPrimitive.Viewport>
+      </SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  );
+})
 ScrollWheelSelectContent.displayName = SelectPrimitive.Content.displayName
 
 const ScrollWheelSelectItem = React.forwardRef<
