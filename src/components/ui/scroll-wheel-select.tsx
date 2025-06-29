@@ -38,7 +38,7 @@ const ScrollWheelSelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-80 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200/60 bg-white/95 backdrop-blur-xl shadow-xl animate-in fade-in-0 zoom-in-95 duration-200",
+        "relative z-50 max-h-[min(400px,60vh)] min-w-[var(--radix-select-trigger-width)] max-w-[min(500px,90vw)] overflow-hidden rounded-xl border border-slate-200/60 bg-white/95 backdrop-blur-xl shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
@@ -48,15 +48,14 @@ const ScrollWheelSelectContent = React.forwardRef<
     >
       <SelectPrimitive.Viewport
         className={cn(
-          "p-2 max-h-72 overflow-y-auto",
-          "scrollbar-thin scrollbar-thumb-slate-300/60 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60",
-          "scroll-smooth",
+          "p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/60 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60 scroll-smooth",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+            "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
         style={{
           scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(203, 213, 225, 0.6) transparent'
+          scrollbarColor: 'rgba(203, 213, 225, 0.6) transparent',
+          maxHeight: 'min(350px, 60vh)'
         }}
       >
         <div className="space-y-1">
@@ -75,13 +74,17 @@ const ScrollWheelSelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-3 pl-3 pr-8 text-sm outline-none focus:bg-blue-50/80 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 hover:bg-slate-50/80 transition-all duration-200 group",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-3 pl-3 pr-8 text-sm outline-none focus:bg-blue-50/80 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 hover:bg-slate-50/80 transition-all duration-200 group min-h-[44px]",
       className
     )}
     {...props}
   >
-    <SelectPrimitive.ItemText className="flex-1">{children}</SelectPrimitive.ItemText>
-    <span className="absolute right-2 flex h-4 w-4 items-center justify-center opacity-0 group-data-[state=checked]:opacity-100 transition-opacity duration-200">
+    <SelectPrimitive.ItemText className="flex-1 overflow-hidden">
+      <div className="flex items-center w-full">
+        {children}
+      </div>
+    </SelectPrimitive.ItemText>
+    <span className="absolute right-2 flex h-4 w-4 items-center justify-center opacity-0 group-data-[state=checked]:opacity-100 transition-opacity duration-200 flex-shrink-0">
       <SelectPrimitive.ItemIndicator>
         <Check className="h-4 w-4 text-blue-600" />
       </SelectPrimitive.ItemIndicator>
