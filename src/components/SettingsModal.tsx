@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,16 +10,33 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Settings, User, Lock, Palette, CreditCard, Upload, Trash2, Plus } from 'lucide-react';
+import { Settings, User, Lock, Palette, CreditCard, Upload, Trash2, Plus, Download, Tag } from 'lucide-react';
 
 interface SettingsModalProps {
   profile: any;
   onProfileUpdate: (profile: any) => void;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  color: string;
+  category_type: string;
+}
+
+interface PaymentCard {
+  id: string;
+  name: string;
+  card_type: string;
+}
+
 const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [cards, setCards] = useState<PaymentCard[]>([]);
+  const [newCategory, setNewCategory] = useState({ name: '', color: '#64748b', type: 'expense' });
+  const [newCard, setNewCard] = useState({ name: '', type: 'debit' });
   const [profileData, setProfileData] = useState({
     full_name: profile?.full_name || '',
     username: profile?.username || '',
@@ -28,6 +45,51 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchCategories();
+      fetchCards();
+    }
+  }, [isOpen]);
+
+  const fetchCategories = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchCards = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setCards(data || []);
+    } catch (error) {
+      console.error('Error fetching cards:', error);
+    }
+  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,19 +166,245 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        const maxSize = 800;
+        const ratio = Math.min(maxSize / img.width, maxSize / img.height);
+        canvas.width = img.width * ratio;
+        canvas.height = img.height * ratio;
+
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Create a data URL for the image
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileData({
-          ...profileData,
-          avatar_url: e.target?.result as string
-        });
-      };
-      reader.readAsDataURL(file);
+      const compressedImage = await compressImage(file);
+      setProfileData({
+        ...profileData,
+        avatar_url: compressedImage
+      });
     }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategory.name.trim()) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('categories')
+        .insert([{
+          user_id: user.id,
+          name: newCategory.name,
+          color: newCategory.color,
+          category_type: newCategory.type
+        }]);
+
+      if (error) throw error;
+
+      setNewCategory({ name: '', color: '#64748b', type: 'expense' });
+      fetchCategories();
+      toast({
+        title: "Success",
+        description: "Category added successfully!"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add category",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      fetchCategories();
+      toast({
+        title: "Success",
+        description: "Category deleted successfully!"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete category",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddCard = async () => {
+    if (!newCard.name.trim()) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('cards')
+        .insert([{
+          user_id: user.id,
+          name: newCard.name,
+          card_type: newCard.type
+        }]);
+
+      if (error) throw error;
+
+      setNewCard({ name: '', type: 'debit' });
+      fetchCards();
+      toast({
+        title: "Success",
+        description: "Payment method added successfully!"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add payment method",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteCard = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('cards')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      fetchCards();
+      toast({
+        title: "Success",
+        description: "Payment method deleted successfully!"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete payment method",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleExportData = async (type: 'expenses' | 'stocks' | 'overview') => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let data;
+      let filename;
+
+      switch (type) {
+        case 'expenses':
+          const { data: expenseData } = await supabase
+            .from('transactions')
+            .select(`
+              amount,
+              description,
+              transaction_date,
+              categories(name),
+              cards(name)
+            `)
+            .eq('user_id', user.id)
+            .order('transaction_date', { ascending: false });
+          
+          data = expenseData;
+          filename = 'expenses.csv';
+          break;
+        
+        case 'stocks':
+          const { data: stockData } = await supabase
+            .from('stock_transactions')
+            .select(`
+              symbol,
+              shares,
+              price_per_share,
+              total_amount,
+              transaction_type,
+              transaction_date
+            `)
+            .eq('user_id', user.id)
+            .order('transaction_date', { ascending: false });
+          
+          data = stockData;
+          filename = 'stocks.csv';
+          break;
+        
+        default:
+          toast({
+            title: "Info",
+            description: "Export feature coming soon!"
+          });
+          return;
+      }
+
+      if (data && data.length > 0) {
+        const csv = convertToCSV(data);
+        downloadCSV(csv, filename);
+        toast({
+          title: "Success",
+          description: "Data exported successfully!"
+        });
+      } else {
+        toast({
+          title: "Info",
+          description: "No data to export"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export data",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const convertToCSV = (data: any[]) => {
+    if (!data.length) return '';
+    
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row => 
+      Object.values(row).map(value => 
+        typeof value === 'object' && value !== null 
+          ? JSON.stringify(value).replace(/"/g, '""')
+          : `"${String(value).replace(/"/g, '""')}"`
+      ).join(',')
+    ).join('\n');
+    
+    return headers + '\n' + rows;
+  };
+
+  const downloadCSV = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -130,7 +418,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
           <Settings className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto bg-white/95 backdrop-blur-xl border-slate-200">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-xl border-slate-200">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-slate-900 flex items-center space-x-2">
             <Settings className="h-5 w-5" />
@@ -155,13 +443,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
           </TabsList>
 
           <TabsContent value="profile" className="space-y-6">
-            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-slate-200/60">
               <CardHeader>
-                <CardTitle className="text-lg">Profile Information</CardTitle>
+                <CardTitle className="text-lg text-slate-900">Profile Information</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleProfileUpdate} className="space-y-4">
-                  {/* Profile Picture */}
                   <div className="flex items-center space-x-4">
                     <Avatar className="h-20 w-20">
                       <AvatarImage src={profileData.avatar_url} />
@@ -200,22 +487,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="full_name">Full Name</Label>
+                      <Label htmlFor="full_name" className="text-slate-700">Full Name</Label>
                       <Input
                         id="full_name"
                         value={profileData.full_name}
                         onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
-                        className="rounded-xl"
+                        className="rounded-xl border-slate-200 hover:border-slate-300 focus:border-slate-400"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="username">Username</Label>
+                      <Label htmlFor="username" className="text-slate-700">Username</Label>
                       <Input
                         id="username"
                         value={profileData.username}
                         onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
                         placeholder="@username"
-                        className="rounded-xl"
+                        className="rounded-xl border-slate-200 hover:border-slate-300 focus:border-slate-400"
                       />
                     </div>
                   </div>
@@ -233,31 +520,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
           </TabsContent>
 
           <TabsContent value="security" className="space-y-6">
-            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-slate-200/60">
               <CardHeader>
-                <CardTitle className="text-lg">Change Password</CardTitle>
+                <CardTitle className="text-lg text-slate-900">Change Password</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handlePasswordChange} className="space-y-4">
                   <div>
-                    <Label htmlFor="new_password">New Password</Label>
+                    <Label htmlFor="new_password" className="text-slate-700">New Password</Label>
                     <Input
                       id="new_password"
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="rounded-xl"
+                      className="rounded-xl border-slate-200 hover:border-slate-300 focus:border-slate-400"
                       required
                     />
                   </div>
                   <div>
-                    <Label htmlFor="confirm_password">Confirm Password</Label>
+                    <Label htmlFor="confirm_password" className="text-slate-700">Confirm Password</Label>
                     <Input
                       id="confirm_password"
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="rounded-xl"
+                      className="rounded-xl border-slate-200 hover:border-slate-300 focus:border-slate-400"
                       required
                     />
                   </div>
@@ -274,39 +561,122 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
           </TabsContent>
 
           <TabsContent value="preferences" className="space-y-6">
-            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+            {/* Categories Management */}
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-slate-200/60">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center space-x-2">
-                  <CreditCard className="h-5 w-5" />
-                  <span>Categories & Payment Methods</span>
+                <CardTitle className="text-lg flex items-center space-x-2 text-slate-900">
+                  <Tag className="h-5 w-5" />
+                  <span>Categories</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-slate-600">
-                  Manage your expense categories and payment methods for better organization.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <Button 
-                    variant="outline" 
-                    className="h-24 flex-col space-y-2 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105"
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Category name"
+                    value={newCategory.name}
+                    onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                    className="flex-1 border-slate-200 hover:border-slate-300 focus:border-slate-400"
+                  />
+                  <input
+                    type="color"
+                    value={newCategory.color}
+                    onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                    className="w-12 h-10 rounded border border-slate-200"
+                  />
+                  <select
+                    value={newCategory.type}
+                    onChange={(e) => setNewCategory({ ...newCategory, type: e.target.value })}
+                    className="px-3 py-2 border border-slate-200 rounded-md"
                   >
-                    <Plus className="h-5 w-5" />
-                    <span>Add Category</span>
+                    <option value="expense">Expense</option>
+                    <option value="stock">Stock</option>
+                  </select>
+                  <Button onClick={handleAddCategory} size="sm">
+                    <Plus className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    className="h-24 flex-col space-y-2 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105"
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    <span>Add Payment Method</span>
-                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {categories.map((category) => (
+                    <div key={category.id} className="flex items-center justify-between p-2 border rounded-lg border-slate-200">
+                      <div className="flex items-center space-x-2">
+                        <div
+                          className="w-4 h-4 rounded-full"
+                          style={{ backgroundColor: category.color }}
+                        />
+                        <span className="text-sm text-slate-700">{category.name}</span>
+                        <Badge variant="secondary" className="text-xs">{category.category_type}</Badge>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteCategory(category.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+            {/* Payment Methods Management */}
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-slate-200/60">
               <CardHeader>
-                <CardTitle className="text-lg">Export Data</CardTitle>
+                <CardTitle className="text-lg flex items-center space-x-2 text-slate-900">
+                  <CreditCard className="h-5 w-5" />
+                  <span>Payment Methods</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Payment method name"
+                    value={newCard.name}
+                    onChange={(e) => setNewCard({ ...newCard, name: e.target.value })}
+                    className="flex-1 border-slate-200 hover:border-slate-300 focus:border-slate-400"
+                  />
+                  <select
+                    value={newCard.type}
+                    onChange={(e) => setNewCard({ ...newCard, type: e.target.value })}
+                    className="px-3 py-2 border border-slate-200 rounded-md"
+                  >
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                  <Button onClick={handleAddCard} size="sm">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {cards.map((card) => (
+                    <div key={card.id} className="flex items-center justify-between p-2 border rounded-lg border-slate-200">
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="h-4 w-4 text-slate-600" />
+                        <span className="text-sm text-slate-700">{card.name}</span>
+                        <Badge variant="outline" className="text-xs">{card.card_type}</Badge>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteCard(card.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Export Data */}
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-slate-200/60">
+              <CardHeader>
+                <CardTitle className="text-lg text-slate-900">Export Data</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-slate-600">
@@ -315,22 +685,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
                 <div className="grid grid-cols-3 gap-3">
                   <Button 
                     variant="outline" 
-                    className="flex-col space-y-2 h-20 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105"
+                    onClick={() => handleExportData('expenses')}
+                    className="flex-col space-y-2 h-20 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105 border-slate-200 hover:border-slate-300"
                   >
+                    <Download className="h-4 w-4" />
                     <span className="text-xs">Export</span>
                     <span className="font-semibold">Expenses</span>
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="flex-col space-y-2 h-20 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105"
+                    onClick={() => handleExportData('stocks')}
+                    className="flex-col space-y-2 h-20 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105 border-slate-200 hover:border-slate-300"
                   >
+                    <Download className="h-4 w-4" />
                     <span className="text-xs">Export</span>
                     <span className="font-semibold">Stocks</span>
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="flex-col space-y-2 h-20 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105"
+                    onClick={() => handleExportData('overview')}
+                    className="flex-col space-y-2 h-20 rounded-xl hover:shadow-md transition-all duration-200 transform hover:scale-105 border-slate-200 hover:border-slate-300"
                   >
+                    <Download className="h-4 w-4" />
                     <span className="text-xs">Export</span>
                     <span className="font-semibold">Overview</span>
                   </Button>
