@@ -3,10 +3,11 @@
   "name": "cash-flow-sync-backend",
   "version": "1.0.0",
   "description": "Backend services for Cash Flow Sync",
-  "main": "index.js",
+  "main": "src/telegram-bot.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node src/telegram-bot.js",
+    "dev": "nodemon src/telegram-bot.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
