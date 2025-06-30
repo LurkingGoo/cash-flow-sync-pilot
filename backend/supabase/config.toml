@@ -1,0 +1,17 @@
+
+project_id = "wugkdcizqdtjfqjznczx"
+
+[functions.get-categories]
+verify_jwt = false
+
+[functions.get-cards]
+verify_jwt = false
+
+[functions.log-transaction]
+verify_jwt = false
+
+[functions.log-stock]
+verify_jwt = false
+
+[functions.telegram-bot]
+verify_jwt = false
