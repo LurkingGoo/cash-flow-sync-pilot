@@ -10,7 +10,7 @@ app.use(express.json());
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const telegramToken = '7411688025:AAGZliqNA9g8HfU_2W_NpLd4tHBcnxzv_g8';
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN || '7411688025:AAGZliqNA9g8HfU_2W_NpLd4tHBcnxzv_g8';
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
