@@ -123,6 +123,12 @@ const ExpenseTracker = () => {
     }
   };
 
+  const handleTransactionDeleted = async () => {
+    // Refresh all data after deletion to update all sums and totals
+    await fetchData();
+    await fetchBudget();
+  };
+
   const filterTransactions = () => {
     let filtered = transactions;
 
@@ -253,7 +259,7 @@ const ExpenseTracker = () => {
       {/* Transactions Table */}
       <TransactionTable 
         transactions={filteredTransactions} 
-        onTransactionDeleted={fetchData}
+        onTransactionDeleted={handleTransactionDeleted}
       />
     </div>
   );
