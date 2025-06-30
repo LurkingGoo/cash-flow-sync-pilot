@@ -11,9 +11,20 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Settings, User, Lock, Palette, CreditCard, Upload, Trash2, Plus, Download, Tag } from 'lucide-react';
 
+interface Profile {
+  id: string;
+  full_name?: string;
+  username?: string;
+  email?: string;
+  avatar_url?: string;
+  telegram_id?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface SettingsModalProps {
-  profile: any;
-  onProfileUpdate: (profile: any) => void;
+  profile: Profile;
+  onProfileUpdate: (profile: Profile) => void;
 }
 
 interface Category {
@@ -39,7 +50,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
   const [profileData, setProfileData] = useState({
     full_name: profile?.full_name || '',
     username: profile?.username || '',
-    avatar_url: profile?.avatar_url || ''
+    avatar_url: profile?.avatar_url || '',
+    telegram_id: profile?.telegram_id || null
   });
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -56,7 +68,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
     setProfileData({
       full_name: profile?.full_name || '',
       username: profile?.username || '',
-      avatar_url: profile?.avatar_url || ''
+      avatar_url: profile?.avatar_url || '',
+      telegram_id: profile?.telegram_id || null
     });
   }, [profile]);
 
@@ -104,30 +117,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.error('No user found');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('profiles')
         .update({
           full_name: profileData.full_name,
           username: profileData.username,
-          avatar_url: profileData.avatar_url
+          avatar_url: profileData.avatar_url,
+          telegram_id: profileData.telegram_id
         })
         .eq('id', user.id)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       onProfileUpdate(data);
       toast({
         title: "Success",
         description: "Profile updated successfully!"
       });
+      
+      // Close the modal after successful update
+      setIsOpen(false);
     } catch (error) {
+      console.error('Profile update error:', error);
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: `Failed to update profile: ${error.message || 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
@@ -174,21 +198,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
   };
 
   const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
 
       img.onload = () => {
-        // Calculate new dimensions (max 300x300)
-        const maxSize = 300;
-        const ratio = Math.min(maxSize / img.width, maxSize / img.height);
-        canvas.width = img.width * ratio;
-        canvas.height = img.height * ratio;
+        try {
+          // Calculate new dimensions (max 300x300)
+          const maxSize = 300;
+          const ratio = Math.min(maxSize / img.width, maxSize / img.height);
+          canvas.width = img.width * ratio;
+          canvas.height = img.height * ratio;
 
-        // Draw and compress
-        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.6)); // 60% quality
+          // Draw and compress
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6); // 60% quality
+            resolve(compressedDataUrl);
+          } else {
+            reject(new Error('Could not get canvas context'));
+          }
+        } catch (error) {
+          reject(error);
+        } finally {
+          URL.revokeObjectURL(img.src);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(img.src);
+        reject(new Error('Failed to load image'));
       };
 
       img.src = URL.createObjectURL(file);
@@ -197,30 +237,49 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Check file size (max 2MB before compression)
-      if (file.size > 2 * 1024 * 1024) {
-        toast({
-          title: "Error",
-          description: "Image size should be less than 2MB",
-          variant: "destructive"
-        });
-        return;
-      }
+    if (!file) return;
 
-      try {
-        const compressedImage = await compressImage(file);
-        setProfileData({
-          ...profileData,
-          avatar_url: compressedImage
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to process image",
-          variant: "destructive"
-        });
-      }
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select a valid image file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check file size (max 2MB before compression)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size should be less than 2MB",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const compressedImage = await compressImage(file);
+      setProfileData(prev => ({
+        ...prev,
+        avatar_url: compressedImage
+      }));
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully! Don't forget to save your changes.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error('Image upload error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process image. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -492,9 +551,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
                 <form onSubmit={handleProfileUpdate} className="space-y-4">
                   <div className="flex items-center space-x-4">
                     <Avatar className="h-20 w-20 shadow-lg border-2 border-slate-200/60">
-                      <AvatarImage src={profileData.avatar_url} className="object-cover" />
+                      <AvatarImage src={profileData.avatar_url} alt="Profile" className="object-cover" />
                       <AvatarFallback className="bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600 text-lg font-semibold">
-                        {profileData.full_name?.charAt(0) || 'U'}
+                        {(profileData.full_name || profileData.username)?.charAt(0) || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
@@ -520,7 +579,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
                           className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50 rounded-xl"
                         >
                           <Trash2 className="h-3 w-3 mr-1" />
-                          Remove
+                          Remove Photo
                         </Button>
                       )}
                     </div>
@@ -528,16 +587,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="full_name" className="text-slate-700 font-medium">Full Name</Label>
+                      <Label htmlFor="full_name" className="text-slate-700 font-medium">
+                        Display Name
+                        <span className="text-xs text-slate-500 font-normal ml-1">(shown in header)</span>
+                      </Label>
                       <Input
                         id="full_name"
                         value={profileData.full_name}
                         onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
+                        placeholder="e.g., John Doe"
                         className="rounded-xl border-slate-200/60 hover:border-blue-300 focus:border-blue-400 bg-white/90 transition-all duration-200"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="username" className="text-slate-700 font-medium">Username</Label>
+                      <Label htmlFor="username" className="text-slate-700 font-medium">
+                        Username
+                        <span className="text-xs text-slate-500 font-normal ml-1">(unique identifier)</span>
+                      </Label>
                       <Input
                         id="username"
                         value={profileData.username}
@@ -546,6 +612,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
                         className="rounded-xl border-slate-200/60 hover:border-blue-300 focus:border-blue-400 bg-white/90 transition-all duration-200"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="telegram_id" className="text-slate-700 font-medium">Telegram ID (Optional)</Label>
+                    <Input
+                      id="telegram_id"
+                      type="number"
+                      value={profileData.telegram_id || ''}
+                      onChange={(e) => setProfileData({ ...profileData, telegram_id: e.target.value ? parseInt(e.target.value) : null })}
+                      placeholder="Your Telegram ID"
+                      className="rounded-xl border-slate-200/60 hover:border-blue-300 focus:border-blue-400 bg-white/90 transition-all duration-200"
+                    />
                   </div>
                   
                   <Button 
