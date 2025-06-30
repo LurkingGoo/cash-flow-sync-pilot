@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import BudgetCard from './expenses/BudgetCard';
@@ -250,7 +251,10 @@ const ExpenseTracker = () => {
       </div>
 
       {/* Transactions Table */}
-      <TransactionTable transactions={filteredTransactions} />
+      <TransactionTable 
+        transactions={filteredTransactions} 
+        onTransactionDeleted={fetchData}
+      />
     </div>
   );
 };

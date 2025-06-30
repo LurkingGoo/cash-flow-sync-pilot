@@ -2,6 +2,10 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Transaction {
   id: string;
@@ -14,9 +18,39 @@ interface Transaction {
 
 interface TransactionTableProps {
   transactions: Transaction[];
+  onTransactionDeleted: () => void;
 }
 
-const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => {
+const TransactionTable: React.FC<TransactionTableProps> = ({ transactions, onTransactionDeleted }) => {
+  const { toast } = useToast();
+
+  const handleDelete = async (transactionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', transactionId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Transaction deleted",
+        description: "The transaction has been successfully deleted.",
+      });
+
+      onTransactionDeleted();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete transaction. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Card className="shadow-lg bg-white/90 backdrop-blur-sm border-slate-200/60 hover:shadow-xl transition-shadow duration-300">
       <CardHeader>
@@ -32,6 +66,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => 
                 <TableHead className="text-slate-600 font-medium">Category</TableHead>
                 <TableHead className="text-slate-600 font-medium">Payment Method</TableHead>
                 <TableHead className="text-right text-slate-600 font-medium">Amount</TableHead>
+                <TableHead className="text-center text-slate-600 font-medium">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -55,11 +90,21 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => 
                     <TableCell className="text-right font-semibold text-red-600">
                       -${Number(transaction.amount).toFixed(2)}
                     </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(transaction.id)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors duration-200"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
                     No transactions found. Try adjusting your filters or add your first expense!
                   </TableCell>
                 </TableRow>
