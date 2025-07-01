@@ -24,6 +24,19 @@ const SetBudgetModal: React.FC<SetBudgetModalProps> = ({ currentBudget, onBudget
     setLoading(true);
     
     try {
+      const budgetValue = parseFloat(budgetAmount);
+      
+      // Validate budget amount
+      if (isNaN(budgetValue) || budgetValue < 0) {
+        toast({
+          title: "Invalid Budget",
+          description: "Budget amount must be a positive number or zero.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -59,20 +72,20 @@ const SetBudgetModal: React.FC<SetBudgetModalProps> = ({ currentBudget, onBudget
       if (existingBudget) {
         await supabase
           .from('budgets')
-          .update({ amount: parseFloat(budgetAmount) })
+          .update({ amount: budgetValue })
           .eq('id', existingBudget.id);
       } else {
         await supabase
           .from('budgets')
           .insert({
             user_id: user.id,
-            amount: parseFloat(budgetAmount),
+            amount: budgetValue,
             month_year: monthYear,
             category_id: categoryId
           });
       }
 
-      onBudgetSet(parseFloat(budgetAmount));
+      onBudgetSet(budgetValue);
       setBudgetAmount('');
       setIsOpen(false);
       
@@ -110,9 +123,16 @@ const SetBudgetModal: React.FC<SetBudgetModalProps> = ({ currentBudget, onBudget
               id="budget"
               type="number"
               step="0.01"
+              min="0"
               placeholder="1000.00"
               value={budgetAmount}
-              onChange={(e) => setBudgetAmount(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Allow empty string for clearing the field, or numbers >= 0
+                if (value === '' || (parseFloat(value) >= 0 && !isNaN(parseFloat(value)))) {
+                  setBudgetAmount(value);
+                }
+              }}
               className="bg-white/90 border-slate-200/60 hover:border-blue-300 focus:border-blue-400 rounded-xl transition-all duration-200"
               required
             />
