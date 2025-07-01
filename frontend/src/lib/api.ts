@@ -66,7 +66,15 @@ export const transactionApi = {
       .order('transaction_date', { ascending: false });
     
     if (error) throw error;
-    return data;
+    
+    // Flatten the nested objects for proper export
+    return data?.map(item => ({
+      amount: item.amount,
+      description: item.description,
+      transaction_date: item.transaction_date,
+      category: item.categories?.name || 'Unknown',
+      card: item.cards?.name || 'Unknown'
+    }));
   }
 };
 

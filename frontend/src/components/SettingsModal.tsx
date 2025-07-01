@@ -430,7 +430,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
             .eq('user_id', user.id)
             .order('transaction_date', { ascending: false });
           
-          data = expenseData;
+          // Flatten the nested objects for CSV export
+          data = expenseData?.map(item => ({
+            amount: item.amount,
+            description: item.description,
+            transaction_date: item.transaction_date,
+            category: item.categories?.name || 'Unknown',
+            card: item.cards?.name || 'Unknown'
+          }));
           filename = 'expenses.csv';
           break;
         
@@ -487,11 +494,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ profile, onProfileUpdate 
     
     const headers = Object.keys(data[0]).join(',');
     const rows = data.map(row => 
-      Object.values(row).map(value => 
-        typeof value === 'object' && value !== null 
-          ? JSON.stringify(value).replace(/"/g, '""')
-          : `"${String(value).replace(/"/g, '""')}"`
-      ).join(',')
+      Object.values(row).map(value => {
+        // Handle nested objects by extracting their values or converting appropriately
+        if (typeof value === 'object' && value !== null) {
+          if ('name' in value && typeof (value as any).name === 'string') {
+            return `"${String((value as any).name).replace(/"/g, '""')}"`;
+          }
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }
+        return `"${String(value).replace(/"/g, '""')}"`;
+      }).join(',')
     ).join('\n');
     
     return headers + '\n' + rows;
