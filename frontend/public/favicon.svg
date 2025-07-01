@@ -1,12 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#475569;stop-opacity:1" />
     </linearGradient>
   </defs>
-  <rect width="24" height="24" rx="4" fill="url(#grad)"/>
-  <path d="M3 3v18h18" stroke="white" stroke-width="2"/>
-  <path d="m19 9-5 5-4-4-3 3" stroke="white" stroke-width="2" fill="none"/>
-  <path d="m12 3 2 14 3-11 2 8" stroke="white" stroke-width="1.5" fill="none"/>
+  <!-- Background rounded rectangle -->
+  <rect width="32" height="32" rx="6" fill="url(#bgGrad)"/>
+  
+  <!-- Chart icon elements -->
+  <!-- Base line -->
+  <line x1="6" y1="26" x2="26" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <line x1="6" y1="6" x2="6" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Chart bars -->
+  <rect x="9" y="20" width="3" height="6" fill="white" rx="1"/>
+  <rect x="13" y="16" width="3" height="10" fill="white" rx="1"/>
+  <rect x="17" y="12" width="3" height="14" fill="white" rx="1"/>
+  <rect x="21" y="8" width="3" height="18" fill="white" rx="1"/>
+  
+  <!-- Trend line -->
+  <path d="M8 22 L12 18 L16 14 L20 10 L24 6" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  
+  <!-- Data points -->
+  <circle cx="12" cy="18" r="1.5" fill="white"/>
+  <circle cx="16" cy="14" r="1.5" fill="white"/>
+  <circle cx="20" cy="10" r="1.5" fill="white"/>
+  <circle cx="24" cy="6" r="1.5" fill="white"/>
 </svg>
