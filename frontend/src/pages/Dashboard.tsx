@@ -263,29 +263,35 @@ const Dashboard = () => {
           onValueChange={setActiveTab} 
           className="w-full"
         >
-          {/* Navigation Tabs - Clean and smooth */}
+          {/* Navigation Tabs - More seamless design */}
           <div className="mb-12">
-            <TabsList className="grid w-full grid-cols-3 bg-white/90 backdrop-blur-md shadow-lg rounded-2xl p-2 border border-slate-200/60 max-w-2xl mx-auto">
+            <TabsList className="grid w-full grid-cols-3 bg-white/70 backdrop-blur-lg shadow-lg rounded-2xl p-1.5 border border-slate-200/40 max-w-2xl mx-auto overflow-hidden">
               <TabsTrigger 
                 value="overview" 
-                className="flex items-center justify-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-xl transition-all duration-300 hover:bg-slate-100/80 py-3 px-4 text-slate-600 hover:text-slate-900 font-medium"
+                className="flex items-center justify-center space-x-2.5 relative overflow-hidden rounded-xl py-3.5 px-5 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
               >
-                <BarChart3 className="h-4 w-4" />
-                <span className="font-semibold text-sm">Dashboard</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
+                <div className="absolute inset-0 bg-slate-100/50 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-data-[state=active]:opacity-0 rounded-xl"></div>
+                <BarChart3 className="h-4 w-4 relative z-10 transition-transform duration-300 group-data-[state=active]:scale-110" />
+                <span className="relative z-10 font-semibold">Dashboard</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="expenses" 
-                className="flex items-center justify-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-xl transition-all duration-300 hover:bg-slate-100/80 py-3 px-4 text-slate-600 hover:text-slate-900 font-medium"
+                className="flex items-center justify-center space-x-2.5 relative overflow-hidden rounded-xl py-3.5 px-5 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
               >
-                <CreditCard className="h-4 w-4" />
-                <span className="font-semibold text-sm">Expenses</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
+                <div className="absolute inset-0 bg-slate-100/50 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-data-[state=active]:opacity-0 rounded-xl"></div>
+                <CreditCard className="h-4 w-4 relative z-10 transition-transform duration-300 group-data-[state=active]:scale-110" />
+                <span className="relative z-10 font-semibold">Expenses</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="stocks" 
-                className="flex items-center justify-center space-x-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white rounded-xl transition-all duration-300 hover:bg-slate-100/80 py-3 px-4 text-slate-600 hover:text-slate-900 font-medium"
+                className="flex items-center justify-center space-x-2.5 relative overflow-hidden rounded-xl py-3.5 px-5 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
               >
-                <TrendingUp className="h-4 w-4" />
-                <span className="font-semibold text-sm">Portfolio</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
+                <div className="absolute inset-0 bg-slate-100/50 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-data-[state=active]:opacity-0 rounded-xl"></div>
+                <TrendingUp className="h-4 w-4 relative z-10 transition-transform duration-300 group-data-[state=active]:scale-110" />
+                <span className="relative z-10 font-semibold">Portfolio</span>
               </TabsTrigger>
             </TabsList>
           </div>
