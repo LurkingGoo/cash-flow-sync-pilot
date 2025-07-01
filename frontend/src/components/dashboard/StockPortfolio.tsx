@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Plus, TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, DollarSign, Activity, Trash2, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useFinancialData } from '@/contexts/FinancialContext';
 
 interface StockTransaction {
   id: string;
@@ -38,6 +39,7 @@ const StockPortfolio = () => {
   const [loading, setLoading] = useState(true);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
   const { toast } = useToast();
+  const { refreshData } = useFinancialData();
 
   // Form state
   const [newTransaction, setNewTransaction] = useState({
@@ -50,7 +52,13 @@ const StockPortfolio = () => {
   });
 
   useEffect(() => {
-    fetchData();
+    const initializeData = async () => {
+      await fetchData();
+      // Run initial holdings calculation to ensure sync
+      await recalculateHoldings();
+      await fetchData(); // Fetch again to get updated holdings
+    };
+    initializeData();
   }, []);
 
   const fetchData = async () => {
@@ -130,6 +138,9 @@ const StockPortfolio = () => {
 
       if (error) throw error;
 
+      // Recalculate holdings after adding transaction
+      await recalculateHoldings();
+
       toast({
         title: "Success",
         description: `Stock transaction added: ${newTransaction.transaction_type.toUpperCase()} ${shares} shares of ${newTransaction.symbol.toUpperCase()}`
@@ -146,12 +157,145 @@ const StockPortfolio = () => {
 
       setIsAddingTransaction(false);
       fetchData();
+      await refreshData(); // Update global financial data
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to add stock transaction",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleDeleteTransaction = async (transactionId: string, symbol: string) => {
+    try {
+      const { error } = await supabase
+        .from('stock_transactions')
+        .delete()
+        .eq('id', transactionId);
+
+      if (error) throw error;
+
+      // Recalculate holdings after deleting transaction
+      await recalculateHoldings();
+
+      toast({
+        title: "Success",
+        description: `Stock transaction deleted for ${symbol}`,
+      });
+
+      fetchData();
+      await refreshData(); // Update global financial data
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete stock transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const recalculateHoldings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get all stock transactions
+      const { data: allTransactions } = await supabase
+        .from('stock_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('transaction_date', { ascending: true });
+
+      if (!allTransactions) return;
+
+      // Calculate holdings for each symbol
+      const holdingsMap = new Map<string, {
+        symbol: string;
+        shares: number;
+        total_cost: number;
+        transactions: any[];
+      }>();
+
+      allTransactions.forEach(transaction => {
+        const symbol = transaction.symbol;
+        const existing = holdingsMap.get(symbol) || {
+          symbol,
+          shares: 0,
+          total_cost: 0,
+          transactions: []
+        };
+
+        if (transaction.transaction_type === 'buy') {
+          existing.shares += transaction.shares;
+          existing.total_cost += transaction.total_amount;
+        } else if (transaction.transaction_type === 'sell') {
+          // For sells, reduce shares and proportionally reduce cost basis
+          const sellRatio = transaction.shares / existing.shares;
+          existing.shares -= transaction.shares;
+          existing.total_cost -= (existing.total_cost * sellRatio);
+        }
+
+        existing.transactions.push(transaction);
+        holdingsMap.set(symbol, existing);
+      });
+
+      // Convert to array and filter out zero holdings
+      const newHoldings = Array.from(holdingsMap.values())
+        .filter(holding => holding.shares > 0)
+        .map(holding => ({
+          id: `${user.id}-${holding.symbol}`, // Generate consistent ID
+          symbol: holding.symbol,
+          shares: Math.round(holding.shares * 100) / 100, // Round to 2 decimal places
+          average_price: holding.total_cost / holding.shares,
+          total_cost: Math.round(holding.total_cost * 100) / 100,
+          current_price: holding.total_cost / holding.shares // Use average price as current price for now
+        }));
+
+      // Clear existing holdings and insert new ones
+      await supabase
+        .from('holdings')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (newHoldings.length > 0) {
+        const holdingsToInsert = newHoldings.map(holding => ({
+          user_id: user.id,
+          symbol: holding.symbol,
+          shares: holding.shares,
+          average_price: holding.average_price,
+          total_cost: holding.total_cost,
+          current_price: holding.current_price
+        }));
+
+        await supabase
+          .from('holdings')
+          .insert(holdingsToInsert);
+      }
+
+      console.log('Holdings recalculated successfully');
+    } catch (error) {
+      console.error('Error recalculating holdings:', error);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setLoading(true);
+    try {
+      await recalculateHoldings();
+      await fetchData();
+      toast({
+        title: "Success",
+        description: "Portfolio holdings synchronized successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to synchronize portfolio holdings",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -207,13 +351,24 @@ const StockPortfolio = () => {
           <p className="text-gray-600">Track your investment performance</p>
         </div>
         
-        <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
-          <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700 shadow-lg">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Transaction
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center space-x-3">
+          <Button 
+            onClick={handleManualSync}
+            variant="outline"
+            className="border-slate-300 hover:bg-slate-50"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Sync Holdings
+          </Button>
+          
+          <Dialog open={isAddingTransaction} onOpenChange={setIsAddingTransaction}>
+            <DialogTrigger asChild>
+              <Button className="bg-green-600 hover:bg-green-700 shadow-lg">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Transaction
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add Stock Transaction</DialogTitle>
@@ -290,6 +445,7 @@ const StockPortfolio = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -440,6 +596,7 @@ const StockPortfolio = () => {
                   <TableHead>Price</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead className="w-20">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -465,11 +622,41 @@ const StockPortfolio = () => {
                       <TableCell className="text-gray-600 text-sm">
                         {transaction.notes || '-'}
                       </TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this {transaction.transaction_type} transaction for {transaction.shares} shares of {transaction.symbol}? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteTransaction(transaction.id, transaction.symbol)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                       No transactions yet. Add your first stock transaction!
                     </TableCell>
                   </TableRow>
