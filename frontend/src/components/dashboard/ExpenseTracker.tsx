@@ -8,6 +8,7 @@ import MonthlyTrendChart from './expenses/MonthlyTrendChart';
 import TransactionTable from './expenses/TransactionTable';
 import AddExpenseModal from './expenses/AddExpenseModal';
 import SetBudgetModal from './expenses/SetBudgetModal';
+import { useFinancialData } from '@/contexts/FinancialContext';
 
 interface Transaction {
   id: string;
@@ -47,6 +48,7 @@ const ExpenseTracker = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [budget, setBudget] = useState<number>(0);
+  const { refreshData } = useFinancialData();
 
   useEffect(() => {
     fetchData();
@@ -93,6 +95,11 @@ const ExpenseTracker = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDataUpdate = async () => {
+    await fetchData();
+    await refreshData(); // Update global financial data
   };
 
   const fetchBudget = async () => {
@@ -212,7 +219,7 @@ const ExpenseTracker = () => {
           <AddExpenseModal 
             categories={categories}
             cards={cards}
-            onTransactionAdded={fetchData}
+            onTransactionAdded={handleDataUpdate}
           />
         </div>
       </div>
@@ -252,7 +259,7 @@ const ExpenseTracker = () => {
       {/* Transactions Table */}
       <TransactionTable 
         transactions={filteredTransactions} 
-        onTransactionDeleted={fetchData}
+        onTransactionDeleted={handleDataUpdate}
       />
     </div>
   );

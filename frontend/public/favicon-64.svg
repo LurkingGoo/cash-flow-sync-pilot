@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#475569;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded rectangle -->
+  <rect width="64" height="64" rx="12" fill="url(#bgGrad)"/>
+  
+  <!-- Chart icon elements -->
+  <!-- Base line -->
+  <line x1="12" y1="52" x2="52" y2="52" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="12" y1="12" x2="12" y2="52" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Chart bars -->
+  <rect x="18" y="40" width="6" height="12" fill="white" rx="2"/>
+  <rect x="26" y="32" width="6" height="20" fill="white" rx="2"/>
+  <rect x="34" y="24" width="6" height="28" fill="white" rx="2"/>
+  <rect x="42" y="16" width="6" height="36" fill="white" rx="2"/>
+  
+  <!-- Trend line -->
+  <path d="M16 44 L24 36 L32 28 L40 20 L48 12" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  
+  <!-- Data points -->
+  <circle cx="24" cy="36" r="3" fill="white"/>
+  <circle cx="32" cy="28" r="3" fill="white"/>
+  <circle cx="40" cy="20" r="3" fill="white"/>
+  <circle cx="48" cy="12" r="3" fill="white"/>
+</svg>

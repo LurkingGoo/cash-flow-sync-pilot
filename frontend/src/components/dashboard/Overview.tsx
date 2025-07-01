@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, CreditCard, PieChart as PieChartIcon, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, CreditCard, PieChart as PieChartIcon, Target, Calendar } from 'lucide-react';
 
 interface DashboardData {
   totalExpenses: number;
@@ -13,7 +15,10 @@ interface DashboardData {
   budgetStatus: Array<{ category: string; spent: number; budget: number; percentage: number }>;
 }
 
-const Overview = () => {
+const Overview = ({ selectedMonth, setSelectedMonth }: { 
+  selectedMonth?: string; 
+  setSelectedMonth?: (month: string) => void;
+}) => {
   const [data, setData] = useState<DashboardData>({
     totalExpenses: 0,
     totalStockValue: 0,
@@ -22,10 +27,16 @@ const Overview = () => {
     budgetStatus: []
   });
   const [loading, setLoading] = useState(true);
+  const [localSelectedMonth, setLocalSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  });
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [localSelectedMonth]);
 
   const fetchDashboardData = async () => {
     try {
@@ -33,18 +44,34 @@ const Overview = () => {
       if (!user) return;
 
       const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().toISOString().slice(0, 7);
+      const currentMonth = localSelectedMonth || new Date().toISOString().slice(0, 7);
 
-      // Fetch expenses for current year
-      const { data: transactions } = await supabase
+      // Build transactions query with month filter
+      let transactionsQuery = supabase
         .from('transactions')
         .select(`
           amount,
           transaction_date,
           categories!inner(name, color)
         `)
-        .eq('user_id', user.id)
-        .gte('transaction_date', `${currentYear}-01-01`);
+        .eq('user_id', user.id);
+
+      // Apply month filter if not "all"
+      if (localSelectedMonth && localSelectedMonth !== 'all') {
+        // Calculate the correct end date for the month
+        const year = parseInt(localSelectedMonth.split('-')[0]);
+        const month = parseInt(localSelectedMonth.split('-')[1]);
+        const lastDay = new Date(year, month, 0).getDate(); // Get last day of the month
+        
+        transactionsQuery = transactionsQuery
+          .gte('transaction_date', `${localSelectedMonth}-01`)
+          .lte('transaction_date', `${localSelectedMonth}-${lastDay.toString().padStart(2, '0')}`);
+      } else {
+        // If "all" or no filter, get current year
+        transactionsQuery = transactionsQuery.gte('transaction_date', `${currentYear}-01-01`);
+      }
+
+      const { data: transactions } = await transactionsQuery;
 
       // Fetch stock holdings
       const { data: holdings } = await supabase
@@ -52,7 +79,8 @@ const Overview = () => {
         .select('shares, average_price, current_price')
         .eq('user_id', user.id);
 
-      // Fetch budgets for current month
+      // Fetch budgets for selected month
+      const budgetMonth = localSelectedMonth === 'all' ? currentMonth : (localSelectedMonth || currentMonth);
       const { data: budgets } = await supabase
         .from('budgets')
         .select(`
@@ -60,7 +88,7 @@ const Overview = () => {
           categories!inner(name, color)
         `)
         .eq('user_id', user.id)
-        .eq('month_year', currentMonth);
+        .eq('month_year', budgetMonth);
 
       // Process data
       const totalExpenses = transactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
@@ -131,6 +159,48 @@ const Overview = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header with Month Filter */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Financial Overview</h2>
+          <p className="text-slate-600">
+            {localSelectedMonth === 'all' ? 'All time data' : 
+             `Data for ${new Date(localSelectedMonth + '-01').toLocaleDateString('en-US', { 
+               year: 'numeric', 
+               month: 'long' 
+             })}`}
+          </p>
+        </div>
+        
+        <div className="flex items-center space-x-3">
+          <Select value={localSelectedMonth} onValueChange={setLocalSelectedMonth}>
+            <SelectTrigger className="w-40 bg-white border-slate-200">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Select month" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              {Array.from({ length: 12 }, (_, i) => {
+                const date = new Date();
+                date.setMonth(date.getMonth() - i);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const value = `${year}-${month}`;
+                const label = date.toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long' 
+                });
+                return (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-lg">

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -13,9 +12,12 @@ import {
   CreditCard, 
   TrendingUp, 
   Search, 
-  Bell
+  Bell,
+  RefreshCw,
+  DollarSign
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Overview from '@/components/dashboard/Overview';
 import ExpenseTracker from '@/components/dashboard/ExpenseTracker';
@@ -24,6 +26,7 @@ import HelpModal from '@/components/HelpModal';
 import NotificationModal from '@/components/NotificationModal';
 import SettingsModal from '@/components/SettingsModal';
 import { profileApi } from '@/lib/api';
+import { FinancialProvider, useFinancialData } from '@/contexts/FinancialContext';
 
 interface Profile {
   id: string;
@@ -41,18 +44,18 @@ interface User {
   email?: string;
 }
 
-const Dashboard = () => {
-  const [user, setUser] = useState<User | null>(null);
+interface DashboardContentProps {
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+}
+
+const DashboardContent = ({ selectedMonth, setSelectedMonth }: DashboardContentProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [quickStats, setQuickStats] = useState({
-    totalBalance: 0,
-    monthlyExpenses: 0,
-    pendingTransactions: 0,
-    portfolioValue: 0
-  });
+  const { data: financialData, refreshData } = useFinancialData();
+
+  const [user, setUser] = useState<User | null>(null);
   const navigate = useNavigate();
 
   const checkAuth = useCallback(async () => {
@@ -67,9 +70,7 @@ const Dashboard = () => {
       // Fetch user profile
       const profileData = await profileApi.get(session.user.id);
       setProfile(profileData);
-
-      // Fetch quick stats
-      await fetchQuickStats(session.user.id);
+      
     } catch (error) {
       console.error('Auth error:', error);
       navigate('/auth');
@@ -82,40 +83,19 @@ const Dashboard = () => {
     checkAuth();
   }, [checkAuth]);
 
+  // Refresh data when switching tabs to ensure latest information
   useEffect(() => {
-    // This effect is triggered when profile changes to ensure UI consistency
-  }, [profile]);
-
-  const fetchQuickStats = async (userId: string) => {
-    try {
-      // Get current month expenses
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const { data: expenses } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('user_id', userId)
-        .gte('transaction_date', `${currentMonth}-01`);
-
-      // Get portfolio value
-      const { data: holdings } = await supabase
-        .from('holdings')
-        .select('shares, current_price, average_price')
-        .eq('user_id', userId);
-
-      const monthlyExpenses = expenses?.reduce((sum, exp) => sum + Number(exp.amount), 0) || 0;
-      const portfolioValue = holdings?.reduce((sum, holding) => 
-        sum + (Number(holding.shares) * (Number(holding.current_price) || Number(holding.average_price))), 0) || 0;
-
-      setQuickStats({
-        totalBalance: portfolioValue - monthlyExpenses,
-        monthlyExpenses,
-        pendingTransactions: 0, // This would need a pending transactions table
-        portfolioValue
-      });
-    } catch (error) {
-      console.error('Error fetching quick stats:', error);
+    if (activeTab && user) {
+      refreshData();
     }
-  };
+  }, [activeTab, refreshData, user]);
+
+  // Refresh data when selectedMonth changes
+  useEffect(() => {
+    if (user && selectedMonth) {
+      refreshData(selectedMonth);
+    }
+  }, [selectedMonth, refreshData, user]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -123,21 +103,18 @@ const Dashboard = () => {
   };
 
   const handleProfileUpdate = async (updatedProfile: Profile) => {
-    // Update the local state immediately
     setProfile(updatedProfile);
     
-    // Also refetch from database to ensure we have the latest data
     try {
       const refreshedProfile = await profileApi.get(updatedProfile.id);
       setProfile(refreshedProfile);
     } catch (error) {
       console.error('Error refetching profile:', error);
     }
-    
-    // Force a re-fetch of quick stats with updated profile
-    if (updatedProfile?.id) {
-      fetchQuickStats(updatedProfile.id);
-    }
+  };
+
+  const handleRefreshData = async () => {
+    await refreshData();
   };
 
   if (loading) {
@@ -155,30 +132,19 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-30 shadow-sm" id="main-header">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-2.5 rounded-xl shadow-lg">
+                <div className="bg-gradient-to-r from-slate-800 to-slate-600 p-2.5 rounded-xl shadow-lg">
                   <BarChart3 className="h-6 w-6 text-white" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-slate-900">
-                    CashFlow Sync
+                    Lurking Finance
                   </h1>
-                  <p className="text-sm text-slate-500">Professional Finance Suite</p>
+                  <p className="text-sm text-slate-500">Personal Wealth Management</p>
                 </div>
-              </div>
-              
-              {/* Search */}
-              <div className="hidden md:flex items-center space-x-2 bg-slate-100/60 rounded-xl px-4 py-2.5 min-w-[320px]">
-                <Search className="h-4 w-4 text-slate-400" />
-                <Input 
-                  placeholder="Search transactions, stocks, or categories..." 
-                  className="border-0 bg-transparent focus:ring-0 text-sm flex-1 placeholder:text-slate-400"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
               </div>
             </div>
             
@@ -186,25 +152,37 @@ const Dashboard = () => {
               {/* Quick Stats */}
               <div className="hidden lg:flex items-center space-x-4 bg-slate-100/40 rounded-xl px-4 py-2">
                 <div className="flex items-center space-x-2">
-                  <div className="bg-green-100 p-1.5 rounded-lg">
-                    <BarChart3 className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Balance</p>
-                    <p className="text-sm font-semibold text-slate-900">
-                      ${quickStats.totalBalance.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="w-px h-8 bg-slate-300"></div>
-                <div className="flex items-center space-x-2">
                   <div className="bg-blue-100 p-1.5 rounded-lg">
                     <TrendingUp className="h-4 w-4 text-blue-600" />
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">This Month</p>
                     <p className="text-sm font-semibold text-slate-900">
-                      ${quickStats.monthlyExpenses.toLocaleString()}
+                      ${financialData.monthlyExpenses.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-px h-8 bg-slate-300"></div>
+                <div className="flex items-center space-x-2">
+                  <div className="bg-emerald-100 p-1.5 rounded-lg">
+                    <DollarSign className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Budget</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      ${financialData.monthlyBudget.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-px h-8 bg-slate-300"></div>
+                <div className="flex items-center space-x-2">
+                  <div className="bg-purple-100 p-1.5 rounded-lg">
+                    <CreditCard className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Portfolio</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      ${financialData.portfolioValue.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -257,38 +235,38 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <Tabs 
           value={activeTab} 
           onValueChange={setActiveTab} 
           className="w-full"
         >
           {/* Navigation Tabs - More seamless design */}
-          <div className="mb-12">
-            <TabsList className="grid w-full grid-cols-3 bg-white/70 backdrop-blur-lg shadow-lg rounded-2xl p-1.5 border border-slate-200/40 max-w-2xl mx-auto overflow-hidden">
+          <div className="mb-8">
+            <TabsList className="grid w-full grid-cols-3 bg-white/70 backdrop-blur-lg shadow-lg rounded-2xl p-1.5 border border-slate-200/40 max-w-lg mx-auto overflow-hidden">
               <TabsTrigger 
                 value="overview" 
-                className="flex items-center justify-center space-x-2.5 relative overflow-hidden rounded-xl py-3.5 px-5 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
+                className="flex items-center justify-center space-x-2 relative overflow-hidden rounded-xl py-3 px-4 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-600 to-slate-700 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
                 <div className="absolute inset-0 bg-slate-100/50 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-data-[state=active]:opacity-0 rounded-xl"></div>
                 <BarChart3 className="h-4 w-4 relative z-10 transition-transform duration-300 group-data-[state=active]:scale-110" />
                 <span className="relative z-10 font-semibold">Dashboard</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="expenses" 
-                className="flex items-center justify-center space-x-2.5 relative overflow-hidden rounded-xl py-3.5 px-5 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
+                className="flex items-center justify-center space-x-2 relative overflow-hidden rounded-xl py-3 px-4 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-600 to-slate-700 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
                 <div className="absolute inset-0 bg-slate-100/50 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-data-[state=active]:opacity-0 rounded-xl"></div>
                 <CreditCard className="h-4 w-4 relative z-10 transition-transform duration-300 group-data-[state=active]:scale-110" />
                 <span className="relative z-10 font-semibold">Expenses</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="stocks" 
-                className="flex items-center justify-center space-x-2.5 relative overflow-hidden rounded-xl py-3.5 px-5 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
+                className="flex items-center justify-center space-x-2 relative overflow-hidden rounded-xl py-3 px-4 text-slate-600 font-medium text-sm transition-all duration-500 ease-out hover:text-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg group"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-600 to-slate-700 opacity-0 transition-opacity duration-500 ease-out group-data-[state=active]:opacity-100 rounded-xl"></div>
                 <div className="absolute inset-0 bg-slate-100/50 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-data-[state=active]:opacity-0 rounded-xl"></div>
                 <TrendingUp className="h-4 w-4 relative z-10 transition-transform duration-300 group-data-[state=active]:scale-110" />
                 <span className="relative z-10 font-semibold">Portfolio</span>
@@ -302,7 +280,7 @@ const Dashboard = () => {
               value="overview" 
               className="mt-0 focus:outline-none data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:zoom-in-95 data-[state=active]:duration-300"
             >
-              <Overview />
+              <Overview selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} />
             </TabsContent>
 
             <TabsContent 
@@ -322,6 +300,63 @@ const Dashboard = () => {
         </Tabs>
       </main>
     </div>
+  );
+};
+
+// Main Dashboard component that provides the financial context
+const Dashboard = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          navigate('/auth');
+          return;
+        }
+        setUser(session.user);
+      } catch (error) {
+        console.error('Auth error:', error);
+        navigate('/auth');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <FinancialProvider userId={user.id} selectedMonth={selectedMonth}>
+      <DashboardContent 
+        selectedMonth={selectedMonth} 
+        setSelectedMonth={setSelectedMonth} 
+      />
+    </FinancialProvider>
   );
 };
 
