@@ -51,7 +51,7 @@
 
 ---
 
-## 🏗️ Backend Architecture
+##  Backend Architecture
 
 ### Express.js Server
 ```javascript
