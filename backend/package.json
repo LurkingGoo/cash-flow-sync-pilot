@@ -1,8 +1,8 @@
 
 {
-  "name": "cash-flow-sync-backend",
+  "name": "lurking-finance-backend",
   "version": "1.0.0",
-  "description": "Backend services for Cash Flow Sync",
+  "description": "Backend services for Lurking Finance",
   "main": "src/telegram-bot.js",
   "type": "module",
   "scripts": {

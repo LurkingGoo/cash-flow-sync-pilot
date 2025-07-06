@@ -1,11 +1,11 @@
-# Cash Flow Sync Pilot
+# Lurking Finance Pilot
 
 A comprehensive financial management application with React frontend and Node.js backend.
 
 ## Project Structure
 
 ```
-cash-flow-sync-pilot/
+lurking-finance-pilot/
 ├── frontend/                 # React + TypeScript frontend
 │   ├── src/
 │   │   ├── components/      # UI components

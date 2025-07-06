@@ -1,5 +1,5 @@
 
-# Cash Flow Sync - Backend
+# Lurking Finance - Backend
 
 This backend provides Edge Functions for iPhone Shortcuts integration.
 

@@ -1,5 +1,5 @@
 
-# Cash Flow Sync - Frontend
+# Lurking Finance - Frontend
 
 React-based frontend for personal finance tracking with expense and stock portfolio management.
 

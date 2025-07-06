@@ -1,8 +1,8 @@
-# Cash Flow Sync - Project Documentation
+# Lurking Finance - Project Documentation
 
 ##  Project Overview
 
-**Cash Flow Sync** is a comprehensive personal finance management application that provides real-time tracking of expenses, budgets, and investment portfolios. The project demonstrates the power of AI-assisted development while highlighting the importance of proper architecture and integration planning.
+**Lurking Finance** is a comprehensive personal finance management application that provides real-time tracking of expenses, budgets, and investment portfolios. The project demonstrates the power of AI-assisted development while highlighting the importance of proper architecture and integration planning.
 
 ###  Key Features
 - **Real-time Financial Dashboard** with expense tracking and budget monitoring
@@ -348,7 +348,7 @@ The most effective approach combines:
 ##  Repository Structure
 
 ```
-cash-flow-sync-pilot/
+lurking-finance-pilot/
 ├── frontend/                    # React TypeScript frontend
 │   ├── src/
 │   │   ├── components/         # UI components
